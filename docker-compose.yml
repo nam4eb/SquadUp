@@ -1,0 +1,139 @@
+services:
+  api:
+    build:
+      context: ./backend
+    working_dir: /app
+    command: php artisan serve --host=0.0.0.0 --port=8000 --no-reload
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-squadup}
+      DB_USERNAME: ${POSTGRES_USER:-squadup}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      REDIS_HOST: redis
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: squadup-local
+      REVERB_APP_KEY: squadup-local-key
+      REVERB_APP_SECRET: squadup-local-secret
+      REVERB_HOST: reverb
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8000/up"]
+      interval: 30s
+      timeout: 5s
+      retries: 10
+
+  reverb:
+    build:
+      context: ./backend
+    working_dir: /app
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080 --debug
+    environment:
+      APP_ENV: local
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-squadup}
+      DB_USERNAME: ${POSTGRES_USER:-squadup}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      CACHE_STORE: redis
+      REDIS_HOST: redis
+      REVERB_APP_ID: squadup-local
+      REVERB_APP_KEY: squadup-local-key
+      REVERB_APP_SECRET: squadup-local-secret
+      REVERB_HOST: 0.0.0.0
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
+      REVERB_SCALING_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  queue:
+    build:
+      context: ./backend
+    working_dir: /app
+    command: php artisan queue:work --sleep=1 --tries=3 --timeout=90
+    environment:
+      APP_ENV: local
+      APP_URL: http://localhost:8000
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-squadup}
+      DB_USERNAME: ${POSTGRES_USER:-squadup}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      REDIS_HOST: redis
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: squadup-local
+      REVERB_APP_KEY: squadup-local-key
+      REVERB_APP_SECRET: squadup-local-secret
+      REVERB_HOST: reverb
+      REVERB_PORT: 8080
+      REVERB_SCHEME: http
+    volumes:
+      - ./backend:/app
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-squadup}
+      POSTGRES_USER: ${POSTGRES_USER:-squadup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+    ports:
+      - "5433:5432"
+    volumes:
+      - squadup_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - squadup_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  squadup_postgres:
+  squadup_redis:

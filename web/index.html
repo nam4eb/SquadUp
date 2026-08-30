@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base href="$FLUTTER_BASE_HREF" />
+
+    <meta charset="UTF-8" />
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible" />
+    <meta name="description" content="A new Flutter project." />
+
+    <!-- iOS meta tags & icons -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="persistent_project" />
+    <link rel="apple-touch-icon" href="icons/Icon-192.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="favicon.png" />
+
+    <title>squadup</title>
+    <link rel="manifest" href="manifest.json" />
+    
+
+    <style>
+      body {
+        background: #000;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      #loading-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background-color: black;
+      }
+
+      .loader {
+        border: 6px solid rgba(255, 255, 255, 0.2);
+        border-top: 6px solid #87ceeb;
+        border-radius: 50%;
+        width: 50px;
+        height: 50px;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+
+      #load-error {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background-color: black;
+        color: #ccc;
+        font-family: system-ui, sans-serif;
+        text-align: center;
+        padding: 24px;
+        box-sizing: border-box;
+      }
+
+      #load-error.visible {
+        display: flex;
+      }
+
+      #load-error h2 {
+        color: #87ceeb;
+        margin: 0 0 12px;
+        font-size: 1.25rem;
+      }
+
+      #load-error pre {
+        background: #1a1a1a;
+        padding: 12px;
+        border-radius: 8px;
+        overflow: auto;
+        max-width: 90%;
+        font-size: 12px;
+        text-align: left;
+      }
+    </style>
+  </head>
+  <body
+    style="
+      background-color: black;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    "
+  >
+    <!-- Loader Container -->
+    <div id="loading-container">
+      <div class="loader"></div>
+    </div>
+
+    <!-- Shown when a startup error occurs -->
+    <div id="load-error">
+      <h2>Something went wrong</h2>
+      <p>The app couldn’t initialize properly due to a code-related issue</p>
+    </div>
+
+    <script>
+      (function () {
+        window.parent.postMessage({ type: "LOADING_STARTED" }, "*");
+      })();
+    </script>
+
+    <script src="flutter_bootstrap.js" async></script>
+
+    <script>
+      var appLoaded = false;
+
+      function removeLoader() {
+        var loader = document.getElementById("loading-container");
+        if (loader) {
+          loader.style.display = "none";
+        }
+      }
+
+      function showLoadError(message, detail) {
+        if (appLoaded) return;
+        appLoaded = true;
+        removeLoader();
+        var errEl = document.getElementById("load-error");
+        if (errEl) {
+          errEl.classList.add("visible");
+        }
+        window.parent.postMessage(
+          { type: "LOADING_ERROR", message: message },
+          "*",
+        );
+        window.parent.postMessage({ type: "LOADING_COMPLETED" }, "*");
+      }
+
+      window.addEventListener("flutter-first-frame", function () {
+        if (appLoaded) return;
+        appLoaded = true;
+        removeLoader();
+        window.parent.postMessage({ type: "LOADING_COMPLETED" }, "*");
+      });
+
+      window.onerror = function (message, source, lineno, colno, error) {
+        var detail = [
+          message,
+          source ? source + ":" + lineno + ":" + colno : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+        if (error && error.stack) detail += "\n" + error.stack;
+        showLoadError(message, detail);
+        return false;
+      };
+
+      window.addEventListener("unhandledrejection", function (event) {
+        var reason = event.reason;
+        var msg = reason && (reason.message || String(reason));
+        var stack = reason && reason.stack;
+        showLoadError(
+          msg || "Unhandled error",
+          stack && stack !== msg ? stack : null,
+        );
+      });
+
+      // If first frame or error does not happen within 90s, stop loader and show message
+      setTimeout(function () {
+        if (appLoaded) return;
+        var loader = document.getElementById("loading-container");
+        if (loader && loader.style.display !== "none") {
+          showLoadError(
+            "Loading timed out",
+            "The app did not start in time. Please refresh the page.",
+          );
+        }
+      }, 90000);
+    </script>
+
+    <script>
+      // Navigation tracking
+      (function (history) {
+        const pushState = history.pushState;
+        const replaceState = history.replaceState;
+
+        function logNavigation(method, url) {
+            if (!url) return;
+
+            var actualPath = url;
+            var lastHashSlash = url.lastIndexOf('#/');
+            if (lastHashSlash !== -1) {
+              actualPath = '/' + url.substring(lastHashSlash + 2);
+            }
+
+            var formattedUrl = actualPath;
+            if (actualPath.startsWith('/') && !actualPath.startsWith('/#')) {
+              formattedUrl = '/#' + actualPath;
+            }
+
+            window.parent.postMessage({
+              type: "NAVIGATION",
+              method: method,
+              url: formattedUrl
+            }, "*");
+          }
+
+        history.pushState = function (state, title, url) {
+          logNavigation("pushState", url);
+          return pushState.apply(history, arguments);
+        };
+
+        history.replaceState = function (state, title, url) {
+          logNavigation("replaceState", url);
+          return replaceState.apply(history, arguments);
+        };
+
+        window.addEventListener("popstate", function (event) {
+          logNavigation("popstate", location.href);
+        });
+      })(window.history);
+    </script>
+
+    <!-- Plugin initialization code will be injected into flutter_plugins.js -->
+    <script src="flutter_plugins.js" defer></script>
+    <script type="module" src="https://static.rocket.new/rocket-shot.js?v=0.0.2"></script>
+  
+  </body>
+</html>
