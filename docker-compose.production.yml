@@ -1,0 +1,122 @@
+x-app-environment: &app-environment
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_KEY: ${APP_KEY:?APP_KEY is required}
+  APP_URL: ${APP_URL:?APP_URL is required}
+  LOG_CHANNEL: stderr
+  LOG_LEVEL: ${LOG_LEVEL:-warning}
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_DATABASE: ${POSTGRES_DB:-squadup}
+  DB_USERNAME: ${POSTGRES_USER:-squadup}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  CACHE_STORE: redis
+  QUEUE_CONNECTION: redis
+  SESSION_DRIVER: redis
+  REDIS_HOST: redis
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+  BROADCAST_CONNECTION: reverb
+  REVERB_APP_ID: ${REVERB_APP_ID:?REVERB_APP_ID is required}
+  REVERB_APP_KEY: ${REVERB_APP_KEY:?REVERB_APP_KEY is required}
+  REVERB_APP_SECRET: ${REVERB_APP_SECRET:?REVERB_APP_SECRET is required}
+  REVERB_HOST: reverb
+  REVERB_PORT: 8080
+  REVERB_SCHEME: http
+
+x-app-service: &app-service
+  image: ${SQUADUP_IMAGE:-squadup-api-production:latest}
+  build:
+    context: ./backend
+    dockerfile: Dockerfile.production
+  restart: unless-stopped
+  environment: *app-environment
+  volumes:
+    - squadup_storage:/var/www/html/storage
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  api:
+    <<: *app-service
+    ports:
+      - "${API_PORT:-8000}:8080"
+    environment:
+      <<: *app-environment
+      AUTORUN_ENABLED: "true"
+      AUTORUN_LARAVEL_MIGRATION_ISOLATION: "true"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/up"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  queue:
+    <<: *app-service
+    command: php artisan queue:work --sleep=1 --tries=3 --timeout=90 --max-time=3600
+    environment:
+      <<: *app-environment
+      AUTORUN_ENABLED: "false"
+    stop_grace_period: 100s
+    healthcheck:
+      disable: true
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  reverb:
+    <<: *app-service
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    environment:
+      <<: *app-environment
+      AUTORUN_ENABLED: "false"
+      REVERB_SCALING_ENABLED: "true"
+    ports:
+      - "${REVERB_PORT:-8080}:8080"
+    healthcheck:
+      disable: true
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-squadup}
+      POSTGRES_USER: ${POSTGRES_USER:-squadup}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - squadup_postgres_production:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - squadup_redis_production:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a $${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  squadup_postgres_production:
+  squadup_redis_production:
+  squadup_storage:

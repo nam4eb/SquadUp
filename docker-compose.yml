@@ -1,4 +1,53 @@
 services:
+  benchmark-init:
+    profiles: ["benchmark"]
+    image: alpine:3.22
+    command: sh -c "rm -rf /target/* /target/.[!.]* /target/..?* 2>/dev/null || true; cp -a /source/. /target/; chown -R 82:82 /target"
+    volumes:
+      - ./backend:/source:ro
+      - squadup_benchmark_code:/target
+
+  api-benchmark:
+    profiles: ["benchmark"]
+    image: squadup-api
+    working_dir: /app
+    command: sh -c "php artisan optimize && php artisan serve --host=0.0.0.0 --port=8001 --no-reload"
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_KEY: ${APP_KEY:-base64:n/i0I7Q+uA7z46W7BRTNAFYGfEKv4BxeQvYZDQpHhmA=}
+      APP_URL: http://localhost:8001
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: warning
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: ${POSTGRES_DB:-squadup}
+      DB_USERNAME: ${POSTGRES_USER:-squadup}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      REDIS_HOST: redis
+      PERFORMANCE_PROFILING_ENABLED: "true"
+    ports:
+      - "8001:8001"
+    volumes:
+      - squadup_benchmark_code:/app
+      - ./backend/docker/benchmark-opcache.ini:/usr/local/etc/php/conf.d/zz-benchmark-opcache.ini:ro
+    depends_on:
+      benchmark-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8001/up"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   api:
     build:
       context: ./backend
@@ -137,3 +186,4 @@ services:
 volumes:
   squadup_postgres:
   squadup_redis:
+  squadup_benchmark_code:
