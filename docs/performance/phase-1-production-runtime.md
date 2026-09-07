@@ -2,7 +2,8 @@
 
 ## Architecture
 
-- API: PHP 8.3 FPM + Nginx, immutable application image.
+- Gateway: Nginx exposes the public API port and balances requests across API replicas.
+- API: PHP 8.3 FPM + Nginx, immutable application image, internal port only.
 - Queue and Reverb: the same immutable image and dependency set.
 - PostgreSQL, Redis, and Laravel storage: persistent Docker volumes.
 - Laravel migration uses an isolation lock; seeding is always disabled.
@@ -34,6 +35,17 @@ docker compose -p squadup-production --env-file .env.production -f docker-compos
 docker compose -p squadup-production --env-file .env.production -f docker-compose.production.yml build api
 docker compose -p squadup-production --env-file .env.production -f docker-compose.production.yml up -d
 ```
+
+To run multiple API and queue replicas on hosts with sufficient CPU, memory,
+and database capacity:
+
+```powershell
+docker compose -p squadup-production --env-file .env.production -f docker-compose.production.yml up -d --scale api=2 --scale queue=2
+```
+
+Set the PHP-FPM worker limits per replica so the total worker budget remains
+appropriate for the host. Do not multiply replicas and retain the full
+per-container worker limit without capacity testing.
 
 ## Verify
 

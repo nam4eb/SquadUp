@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../routes/app_routes.dart';
 import '../application/activity_taxonomy_controller.dart';
+import '../../onboarding/data/onboarding_repository.dart';
 import '../data/activities_repository.dart';
 import '../domain/activity_item.dart';
 import 'activity_thumbnail.dart';
+import 'explore_map.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
   const ExploreScreen({super.key});
@@ -21,6 +25,12 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   final _latitude = TextEditingController();
   final _longitude = TextEditingController();
   String? _categoryId;
+  String? _sportId;
+  String? _matchFormat;
+  double _skill = 1400;
+  bool _filterSkill = false;
+  bool _openSlots = true;
+  bool _showMap = false;
   double _radius = 20;
   Position? _position;
   String? _locationState;
@@ -33,7 +43,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   @override
   void initState() {
     super.initState();
-    _locateAndLoad();
+    _restoreFilters();
   }
 
   @override
@@ -47,6 +57,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   @override
   Widget build(BuildContext context) {
     final categories = ref.watch(activityTaxonomyControllerProvider);
+    final sports = ref.watch(sportsProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Explore activities')),
       body: RefreshIndicator(
@@ -54,6 +65,30 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Row(
+              children: [
+                Expanded(
+                  child: SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(
+                        value: false,
+                        icon: Icon(Icons.view_list),
+                        label: Text('List'),
+                      ),
+                      ButtonSegment(
+                        value: true,
+                        icon: Icon(Icons.map_outlined),
+                        label: Text('Map'),
+                      ),
+                    ],
+                    selected: {_showMap},
+                    onSelectionChanged: (value) =>
+                        setState(() => _showMap = value.first),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             SearchBar(
               controller: _search,
               hintText: 'Search title, description or location',
@@ -67,6 +102,33 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               onSubmitted: (_) => _load(),
             ),
             const SizedBox(height: 12),
+            sports.when(
+              data: (items) => SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    ChoiceChip(
+                      label: const Text('All sports'),
+                      selected: _sportId == null,
+                      onSelected: (_) => _selectSport(null),
+                    ),
+                    ...items.map(
+                      (sport) => Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: ChoiceChip(
+                          label: Text(sport.name),
+                          selected: _sportId == sport.id,
+                          onSelected: (_) => _selectSport(sport.id),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              loading: () => const LinearProgressIndicator(),
+              error: (_, _) => const SizedBox.shrink(),
+            ),
+            const SizedBox(height: 8),
             categories.when(
               data: (items) => SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
@@ -92,6 +154,52 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               ),
               loading: () => const LinearProgressIndicator(),
               error: (_, _) => const SizedBox.shrink(),
+            ),
+            ExpansionTile(
+              title: const Text('Match filters'),
+              children: [
+                DropdownButtonFormField<String?>(
+                  initialValue: _matchFormat,
+                  decoration: const InputDecoration(labelText: 'Format'),
+                  items: const [
+                    DropdownMenuItem(value: null, child: Text('Any format')),
+                    DropdownMenuItem(value: 'singles', child: Text('Singles')),
+                    DropdownMenuItem(value: 'doubles', child: Text('Doubles')),
+                    DropdownMenuItem(value: 'team', child: Text('Team')),
+                    DropdownMenuItem(value: 'open', child: Text('Open play')),
+                  ],
+                  onChanged: (value) => setState(() => _matchFormat = value),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Only matches with open slots'),
+                  value: _openSlots,
+                  onChanged: (value) => setState(() => _openSlots = value),
+                ),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Match my skill'),
+                  subtitle: Text('Rating ${_skill.round()}'),
+                  value: _filterSkill,
+                  onChanged: (value) => setState(() => _filterSkill = value),
+                ),
+                if (_filterSkill)
+                  Slider(
+                    min: 800,
+                    max: 2400,
+                    divisions: 16,
+                    label: _skill.round().toString(),
+                    value: _skill,
+                    onChanged: (value) => setState(() => _skill = value),
+                  ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: FilledButton(
+                    onPressed: _load,
+                    child: const Text('Apply filters'),
+                  ),
+                ),
+              ],
             ),
             ExpansionTile(
               title: const Text('Nearby radius'),
@@ -169,6 +277,27 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 padding: EdgeInsets.all(32),
                 child: Center(child: Text('No matching activities.')),
               )
+            else if (_showMap)
+              SizedBox(
+                height: MediaQuery.sizeOf(context).height * .55,
+                child: ExploreMap(
+                  activities: _results,
+                  initialCenter: LatLng(
+                    _position?.latitude ??
+                        double.tryParse(_latitude.text) ??
+                        10.7769,
+                    _position?.longitude ??
+                        double.tryParse(_longitude.text) ??
+                        106.7009,
+                  ),
+                  onSearchArea: (center) {
+                    _position = null;
+                    _latitude.text = center.latitude.toStringAsFixed(6);
+                    _longitude.text = center.longitude.toStringAsFixed(6);
+                    _load();
+                  },
+                ),
+              )
             else
               ..._results.map(
                 (activity) => Card(
@@ -205,10 +334,18 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
   void _selectCategory(String? id) {
     setState(() => _categoryId = id);
+    _saveFilters();
+    _load();
+  }
+
+  void _selectSport(String? id) {
+    setState(() => _sportId = id);
+    _saveFilters();
     _load();
   }
 
   Future<void> _load({bool loadMore = false}) async {
+    await _saveFilters();
     final latitude =
         _position?.latitude ?? double.tryParse(_latitude.text.trim());
     final longitude =
@@ -229,6 +366,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             .nearby(
               query: _search.text,
               categoryId: _categoryId,
+              sportId: _sportId,
+              skill: _filterSkill ? _skill.round() : null,
+              matchFormat: _matchFormat,
+              openSlots: _openSlots,
               latitude: latitude,
               longitude: longitude,
               radiusKm: _radius,
@@ -246,7 +387,14 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       } else {
         final results = await ref
             .read(activitiesRepositoryProvider)
-            .list(query: _search.text, categoryId: _categoryId);
+            .list(
+              query: _search.text,
+              categoryId: _categoryId,
+              sportId: _sportId,
+              skill: _filterSkill ? _skill.round() : null,
+              matchFormat: _matchFormat,
+              openSlots: _openSlots,
+            );
         if (mounted) {
           setState(() {
             _results = results;
@@ -259,6 +407,40 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _restoreFilters() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _sportId = preferences.getString('explore.sport_id');
+      _matchFormat = preferences.getString('explore.match_format');
+      _radius = preferences.getDouble('explore.radius') ?? 20;
+      _skill = preferences.getDouble('explore.skill') ?? 1400;
+      _filterSkill = preferences.getBool('explore.filter_skill') ?? false;
+      _openSlots = preferences.getBool('explore.open_slots') ?? true;
+      _showMap = preferences.getBool('explore.show_map') ?? false;
+    });
+    await _locateAndLoad();
+  }
+
+  Future<void> _saveFilters() async {
+    final preferences = await SharedPreferences.getInstance();
+    if (_sportId == null) {
+      await preferences.remove('explore.sport_id');
+    } else {
+      await preferences.setString('explore.sport_id', _sportId!);
+    }
+    if (_matchFormat == null) {
+      await preferences.remove('explore.match_format');
+    } else {
+      await preferences.setString('explore.match_format', _matchFormat!);
+    }
+    await preferences.setDouble('explore.radius', _radius);
+    await preferences.setDouble('explore.skill', _skill);
+    await preferences.setBool('explore.filter_skill', _filterSkill);
+    await preferences.setBool('explore.open_slots', _openSlots);
+    await preferences.setBool('explore.show_map', _showMap);
   }
 
   Future<void> _locateAndLoad() async {

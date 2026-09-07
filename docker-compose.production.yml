@@ -5,6 +5,14 @@ x-app-environment: &app-environment
   APP_URL: ${APP_URL:?APP_URL is required}
   LOG_CHANNEL: stderr
   LOG_LEVEL: ${LOG_LEVEL:-warning}
+  API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-120}
+  PERFORMANCE_PROFILING_ENABLED: ${PERFORMANCE_PROFILING_ENABLED:-false}
+  PHP_FPM_PM_CONTROL: ${PHP_FPM_PM_CONTROL:-dynamic}
+  PHP_FPM_PM_MAX_CHILDREN: ${PHP_FPM_PM_MAX_CHILDREN:-40}
+  PHP_FPM_PM_START_SERVERS: ${PHP_FPM_PM_START_SERVERS:-8}
+  PHP_FPM_PM_MIN_SPARE_SERVERS: ${PHP_FPM_PM_MIN_SPARE_SERVERS:-8}
+  PHP_FPM_PM_MAX_SPARE_SERVERS: ${PHP_FPM_PM_MAX_SPARE_SERVERS:-20}
+  PHP_FPM_PM_MAX_REQUESTS: ${PHP_FPM_PM_MAX_REQUESTS:-500}
   DB_CONNECTION: pgsql
   DB_HOST: postgres
   DB_PORT: 5432
@@ -42,8 +50,8 @@ x-app-service: &app-service
 services:
   api:
     <<: *app-service
-    ports:
-      - "${API_PORT:-8000}:8080"
+    expose:
+      - "8080"
     environment:
       <<: *app-environment
       AUTORUN_ENABLED: "true"
@@ -54,6 +62,23 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+
+  gateway:
+    image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8000}:8080"
+    volumes:
+      - ./backend/docker/nginx/load-balancer.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/gateway-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   queue:
     <<: *app-service

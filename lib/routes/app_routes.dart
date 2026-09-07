@@ -21,6 +21,7 @@ import '../features/chat/presentation/conversation_screen.dart';
 import '../features/chat/presentation/group_conversation_settings_screen.dart';
 import '../features/authentication/presentation/account_settings_screen.dart';
 import '../features/profile/presentation/profile_screen.dart';
+import '../features/onboarding/presentation/onboarding_screen.dart';
 
 class AppRoutes {
   AppRoutes._();
@@ -46,6 +47,7 @@ class AppRoutes {
   static const String accountSettings = '/account-settings';
   static const String profile = '/profile';
   static const String explore = '/explore';
+  static const String onboarding = '/onboarding';
 }
 
 final GoRouter appRouter = GoRouter(
@@ -133,6 +135,10 @@ final GoRouter appRouter = GoRouter(
           ],
         ),
       ],
+    ),
+    GoRoute(
+      path: AppRoutes.onboarding,
+      builder: (context, state) => const OnboardingScreen(),
     ),
     GoRoute(
       path: AppRoutes.redeemInvitation,

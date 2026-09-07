@@ -10,19 +10,40 @@ class ActivitiesRepository {
   final Dio _dio;
   ActivitiesRepository(this._dio);
 
+  Future<List<VenueOption>> venues({String? query}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/venues',
+      queryParameters: {
+        if (query?.trim().isNotEmpty == true) 'query': query!.trim(),
+        'per_page': 50,
+      },
+    );
+    return (response.data!['data'] as List)
+        .map((item) => VenueOption.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<ActivityItem>> list({
     String? query,
     String? categoryId,
+    String? sportId,
+    int? skill,
+    String? matchFormat,
+    bool openSlots = false,
     double? latitude,
     double? longitude,
     double? radiusKm,
     int page = 1,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
-      '/activities',
+      '/explore',
       queryParameters: {
         if (query?.trim().isNotEmpty == true) 'query': query!.trim(),
         if (categoryId != null) 'category_id': categoryId,
+        if (sportId != null) 'sport_id': sportId,
+        if (skill != null) 'skill': skill,
+        if (matchFormat != null) 'match_format': matchFormat,
+        if (openSlots) 'open_slots': true,
         if (latitude != null) 'near_lat': latitude,
         if (longitude != null) 'near_lng': longitude,
         if (radiusKm != null) 'radius_km': radiusKm,
@@ -40,10 +61,14 @@ class ActivitiesRepository {
     required double radiusKm,
     String? query,
     String? categoryId,
+    String? sportId,
+    int? skill,
+    String? matchFormat,
+    bool openSlots = false,
     int page = 1,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
-      '/activities',
+      '/explore',
       queryParameters: {
         'near_lat': latitude,
         'near_lng': longitude,
@@ -52,6 +77,10 @@ class ActivitiesRepository {
         'page': page,
         if (query?.trim().isNotEmpty == true) 'query': query!.trim(),
         if (categoryId != null) 'category_id': categoryId,
+        if (sportId != null) 'sport_id': sportId,
+        if (skill != null) 'skill': skill,
+        if (matchFormat != null) 'match_format': matchFormat,
+        if (openSlots) 'open_slots': true,
       },
     );
     final meta = response.data!['meta'] as Map<String, dynamic>;
@@ -248,6 +277,31 @@ class ActivitiesRepository {
 final activitiesRepositoryProvider = Provider<ActivitiesRepository>(
   (ref) => ActivitiesRepository(ref.watch(dioProvider)),
 );
+
+final venuesProvider = FutureProvider<List<VenueOption>>((ref) {
+  return ref.watch(activitiesRepositoryProvider).venues();
+});
+
+class VenueOption {
+  const VenueOption({
+    required this.id,
+    required this.name,
+    required this.address,
+    required this.city,
+  });
+
+  final String id;
+  final String name;
+  final String address;
+  final String? city;
+
+  factory VenueOption.fromJson(Map<String, dynamic> json) => VenueOption(
+    id: json['id'] as String,
+    name: json['name'] as String,
+    address: json['address'] as String,
+    city: json['city'] as String?,
+  );
+}
 
 class ActivityPage {
   const ActivityPage(this.items, this.currentPage, this.lastPage);

@@ -1,4 +1,48 @@
 services:
+  load-test:
+    profiles: ["loadtest"]
+    image: grafana/k6:0.54.0
+    environment:
+      BASE_URL: ${LOAD_TEST_BASE_URL:-http://host.docker.internal:8001/api/v1}
+      BENCHMARK_EMAIL: ${BENCHMARK_EMAIL:-demo@squadup.test}
+      BENCHMARK_EMAILS: ${BENCHMARK_EMAILS:-}
+      BENCHMARK_PASSWORD: ${BENCHMARK_PASSWORD:-}
+      SUMMARY_FILE: ${LOAD_TEST_SUMMARY_FILE:-phase-3-load-summary.json}
+      STAGE_10: ${LOAD_TEST_STAGE_10:-20s}
+      STAGE_50: ${LOAD_TEST_STAGE_50:-20s}
+      STAGE_100: ${LOAD_TEST_STAGE_100:-20s}
+      STAGE_10_TARGET: ${LOAD_TEST_STAGE_10_TARGET:-10}
+      STAGE_50_TARGET: ${LOAD_TEST_STAGE_50_TARGET:-50}
+      STAGE_100_TARGET: ${LOAD_TEST_STAGE_100_TARGET:-100}
+      RAMP_DOWN_DURATION: ${LOAD_TEST_RAMP_DOWN_DURATION:-10s}
+      ITERATION_SLEEP_SECONDS: ${LOAD_TEST_ITERATION_SLEEP_SECONDS:-0.2}
+    command: run /scripts/squadup-api.js
+    volumes:
+      - ./scripts/load-test:/scripts:ro
+      - ./docs/performance:/results
+
+  test:
+    profiles: ["test"]
+    build:
+      context: ./backend
+    working_dir: /app
+    command: php artisan test
+    environment:
+      APP_ENV: testing
+      APP_MAINTENANCE_DRIVER: file
+      BCRYPT_ROUNDS: 4
+      CACHE_STORE: array
+      PRESENCE_STORE: array
+      BROADCAST_CONNECTION: "null"
+      DB_CONNECTION: sqlite
+      DB_DATABASE: ":memory:"
+      MAIL_MAILER: array
+      QUEUE_CONNECTION: sync
+      SESSION_DRIVER: array
+      PERFORMANCE_PROFILING_ENABLED: "false"
+    volumes:
+      - ./backend:/app
+
   benchmark-init:
     profiles: ["benchmark"]
     image: alpine:3.22
@@ -30,6 +74,7 @@ services:
       SESSION_DRIVER: redis
       REDIS_HOST: redis
       PERFORMANCE_PROFILING_ENABLED: "true"
+      API_RATE_LIMIT_PER_MINUTE: "100000"
     ports:
       - "8001:8001"
     volumes:

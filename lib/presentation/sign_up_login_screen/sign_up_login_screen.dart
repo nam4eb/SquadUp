@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
@@ -8,15 +9,16 @@ import '../../widgets/custom_icon_widget.dart';
 import './widgets/auth_form_widget.dart';
 import './widgets/auth_header_widget.dart';
 import './widgets/social_auth_widget.dart';
+import '../../features/authentication/application/auth_controller.dart';
 
-class SignUpLoginScreen extends StatefulWidget {
+class SignUpLoginScreen extends ConsumerStatefulWidget {
   const SignUpLoginScreen({super.key});
 
   @override
-  State<SignUpLoginScreen> createState() => _SignUpLoginScreenState();
+  ConsumerState<SignUpLoginScreen> createState() => _SignUpLoginScreenState();
 }
 
-class _SignUpLoginScreenState extends State<SignUpLoginScreen>
+class _SignUpLoginScreenState extends ConsumerState<SignUpLoginScreen>
     with SingleTickerProviderStateMixin {
   bool _isLogin = true;
   late AnimationController _entranceController;
@@ -55,7 +57,12 @@ class _SignUpLoginScreenState extends State<SignUpLoginScreen>
   }
 
   void _onAuthSuccess() {
-    context.go(AppRoutes.homeFeed);
+    final user = ref.read(authControllerProvider).user;
+    context.go(
+      user?.onboardingCompleted == true
+          ? AppRoutes.homeFeed
+          : AppRoutes.onboarding,
+    );
   }
 
   @override

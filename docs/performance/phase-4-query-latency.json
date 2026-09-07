@@ -1,0 +1,54 @@
+[
+  {
+    "Endpoint": "activities",
+    "Requests": 20,
+    "Errors": 0,
+    "StatusCodes": "200:20",
+    "FirstError": null,
+    "QueryCount": 7.0,
+    "ServerTiming": "db;dur=14.62, app;dur=22.41",
+    "MinMs": 39.2,
+    "P50Ms": 40.37,
+    "P95Ms": 48.66,
+    "MaxMs": 59.67
+  },
+  {
+    "Endpoint": "stories",
+    "Requests": 20,
+    "Errors": 0,
+    "StatusCodes": "200:20",
+    "FirstError": null,
+    "QueryCount": 1.0,
+    "ServerTiming": "db;dur=3.74, app;dur=5.29",
+    "MinMs": 21.98,
+    "P50Ms": 22.83,
+    "P95Ms": 25.54,
+    "MaxMs": 39.57
+  },
+  {
+    "Endpoint": "conversations",
+    "Requests": 20,
+    "Errors": 0,
+    "StatusCodes": "200:20",
+    "FirstError": null,
+    "QueryCount": 7.0,
+    "ServerTiming": "db;dur=11.47, app;dur=17.31",
+    "MinMs": 33.56,
+    "P50Ms": 36.74,
+    "P95Ms": 47.14,
+    "MaxMs": 49.07
+  },
+  {
+    "Endpoint": "presence",
+    "Requests": 20,
+    "Errors": 0,
+    "StatusCodes": "200:20",
+    "FirstError": null,
+    "QueryCount": 0.0,
+    "ServerTiming": "db;dur=0, app;dur=1.83",
+    "MinMs": 18.22,
+    "P50Ms": 18.99,
+    "P95Ms": 19.68,
+    "MaxMs": 21.36
+  }
+]

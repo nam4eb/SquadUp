@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/activities/data/activities_repository.dart';
+import '../../core/network/api_error.dart';
 import '../../features/activities/domain/activity_item.dart';
 import '../../features/activities/presentation/activity_thumbnail.dart';
 import '../../features/friends/data/friends_repository.dart';
@@ -39,6 +40,8 @@ class ActivityDetailScreen extends ConsumerWidget {
             Wrap(
               spacing: 8,
               children: [
+                if (activity.sportName != null)
+                  Chip(label: Text(activity.sportName!)),
                 Chip(label: Text(activity.topicName)),
                 Chip(label: Text(activity.visibility.replaceAll('_', ' '))),
                 if (activity.passwordProtected)
@@ -61,6 +64,23 @@ class ActivityDetailScreen extends ConsumerWidget {
               icon: Icons.location_on_outlined,
               text: activity.locationName,
             ),
+            if (activity.matchFormat != null)
+              _Info(
+                icon: Icons.sports_tennis,
+                text: 'Format: ${activity.matchFormat}',
+              ),
+            if (activity.skillMin != null || activity.skillMax != null)
+              _Info(
+                icon: Icons.equalizer,
+                text:
+                    'Skill: ${activity.skillMin ?? 'Any'}–${activity.skillMax ?? 'Any'}',
+              ),
+            if (activity.fee != null)
+              _Info(
+                icon: Icons.payments_outlined,
+                text:
+                    'Fee: ${activity.fee!.toStringAsFixed(0)} ${activity.currency ?? ''}',
+              ),
             _Info(
               icon: Icons.people_outline,
               text:
@@ -466,8 +486,8 @@ class _HostControlsState extends ConsumerState<_HostControls> {
           ],
         ),
       );
-    } catch (_) {
-      _showError();
+    } catch (error) {
+      _showError(error);
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -575,8 +595,8 @@ class _HostControlsState extends ConsumerState<_HostControls> {
           ).showSnackBar(const SnackBar(content: Text('Invitation sent.')));
         }
       }
-    } catch (_) {
-      _showError();
+    } catch (error) {
+      _showError(error);
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -590,8 +610,8 @@ class _HostControlsState extends ConsumerState<_HostControls> {
       await action();
       ref.invalidate(activityDetailProvider(widget.activity.id));
       ref.invalidate(activityFeedProvider);
-    } catch (_) {
-      _showError();
+    } catch (error) {
+      _showError(error);
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -600,20 +620,38 @@ class _HostControlsState extends ConsumerState<_HostControls> {
   }
 
   Future<void> _transition(String status) async {
-    if (status == 'cancelled') {
+    if (['ongoing', 'completed', 'cancelled'].contains(status)) {
+      final labels = {
+        'ongoing': (
+          'Start activity?',
+          'Participants will see this activity as ongoing.',
+          'Start',
+        ),
+        'completed': (
+          'Complete activity?',
+          'Attendance can still be corrected after completion.',
+          'Complete',
+        ),
+        'cancelled': (
+          'Cancel activity?',
+          'Participants will no longer be able to join.',
+          'Cancel activity',
+        ),
+      };
+      final copy = labels[status]!;
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Cancel activity?'),
-          content: const Text('Participants will no longer be able to join.'),
+          title: Text(copy.$1),
+          content: Text(copy.$2),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Keep'),
+              child: const Text('Back'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Cancel activity'),
+              child: Text(copy.$3),
             ),
           ],
         ),
@@ -629,8 +667,8 @@ class _HostControlsState extends ConsumerState<_HostControls> {
           .transition(widget.activity.id, status);
       ref.invalidate(activityDetailProvider(widget.activity.id));
       ref.invalidate(activityFeedProvider);
-    } catch (_) {
-      _showError();
+    } catch (error) {
+      _showError(error);
     } finally {
       if (mounted) {
         setState(() => _loading = false);
@@ -638,10 +676,19 @@ class _HostControlsState extends ConsumerState<_HostControls> {
     }
   }
 
-  void _showError() {
+  void _showError([Object? error]) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to update the activity.')),
+        SnackBar(
+          content: Text(
+            error == null
+                ? 'Unable to update the activity.'
+                : apiErrorMessage(
+                    error,
+                    fallback: 'Unable to update the activity.',
+                  ),
+          ),
+        ),
       );
     }
   }
@@ -848,10 +895,15 @@ class _ParticipationActionState extends ConsumerState<_ParticipationAction> {
         ],
       );
     }
+    final joinable =
+        ['open', 'full'].contains(activity.status) &&
+        activity.startsAt.isAfter(DateTime.now());
     return FilledButton(
-      onPressed: _loading ? null : _join,
+      onPressed: _loading || !joinable ? null : _join,
       child: Text(
-        _loading
+        !joinable
+            ? 'Activity is not accepting participants'
+            : _loading
             ? 'Joining…'
             : activity.requireApproval
             ? 'Request to join'
@@ -909,10 +961,17 @@ class _ParticipationActionState extends ConsumerState<_ParticipationAction> {
       await action();
       ref.invalidate(activityDetailProvider(widget.activity.id));
       ref.invalidate(activityFeedProvider);
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Unable to update participation.')),
+          SnackBar(
+            content: Text(
+              apiErrorMessage(
+                error,
+                fallback: 'Unable to update participation.',
+              ),
+            ),
+          ),
         );
       }
     } finally {

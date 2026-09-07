@@ -7,6 +7,8 @@ class AuthUser {
   final String? coverUrl;
   final String? bio;
   final String? location;
+  final String onboardingStep;
+  final bool onboardingCompleted;
 
   const AuthUser({
     required this.id,
@@ -17,6 +19,8 @@ class AuthUser {
     this.coverUrl,
     this.bio,
     this.location,
+    this.onboardingStep = 'profile',
+    this.onboardingCompleted = false,
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
@@ -29,6 +33,8 @@ class AuthUser {
       coverUrl: json['cover_url'] as String?,
       bio: json['bio'] as String?,
       location: json['location'] as String?,
+      onboardingStep: json['onboarding_step'] as String? ?? 'profile',
+      onboardingCompleted: json['onboarding_completed_at'] != null,
     );
   }
 }

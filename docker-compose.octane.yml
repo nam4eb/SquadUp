@@ -1,0 +1,21 @@
+services:
+  api:
+    image: ${SQUADUP_OCTANE_IMAGE:-squadup-api-octane:latest}
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.octane
+      args:
+        BASE_IMAGE: ${SQUADUP_IMAGE:-squadup-api-production:latest}
+    command: >-
+      sh -c "php artisan octane:start
+      --server=roadrunner
+      --host=0.0.0.0
+      --port=8080
+      --workers=$${OCTANE_WORKERS}
+      --max-requests=$${OCTANE_MAX_REQUESTS}
+      --log-level=$${OCTANE_LOG_LEVEL}"
+    environment:
+      OCTANE_SERVER: roadrunner
+      OCTANE_WORKERS: ${OCTANE_WORKERS:-8}
+      OCTANE_MAX_REQUESTS: ${OCTANE_MAX_REQUESTS:-500}
+      OCTANE_LOG_LEVEL: ${OCTANE_LOG_LEVEL:-warn}

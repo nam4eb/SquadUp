@@ -1,0 +1,299 @@
+{
+  "container": "squadup-soak-api-1",
+  "started_at": "2026-09-06T06:02:55.9281444+00:00",
+  "finished_at": "2026-09-06T06:06:02.4647831+00:00",
+  "duration_seconds": 180,
+  "interval_seconds": 5,
+  "samples": [
+    {
+      "timestamp": "2026-09-06T06:02:57.3239243+00:00",
+      "cpu_percent": 0.81,
+      "memory_usage": "324.8MiB / 7.676GiB",
+      "memory_percent": 4.13,
+      "network_io": "285kB / 357kB",
+      "block_io": "918kB / 1.94MB",
+      "pids": 30,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:03:03.6267794+00:00",
+      "cpu_percent": 77.03,
+      "memory_usage": "416.5MiB / 7.676GiB",
+      "memory_percent": 5.3,
+      "network_io": "306kB / 388kB",
+      "block_io": "1.78MB / 1.94MB",
+      "pids": 30,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:03:09.9294077+00:00",
+      "cpu_percent": 63.54,
+      "memory_usage": "535.1MiB / 7.676GiB",
+      "memory_percent": 6.81,
+      "network_io": "2.87MB / 2.85MB",
+      "block_io": "1.96MB / 1.94MB",
+      "pids": 31,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:03:16.2334391+00:00",
+      "cpu_percent": 137.96,
+      "memory_usage": "552.4MiB / 7.676GiB",
+      "memory_percent": 7.03,
+      "network_io": "7.58MB / 6.04MB",
+      "block_io": "1.96MB / 1.94MB",
+      "pids": 32,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:03:22.5371413+00:00",
+      "cpu_percent": 193.74,
+      "memory_usage": "510MiB / 7.676GiB",
+      "memory_percent": 6.49,
+      "network_io": "14.6MB / 10.7MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 32,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:03:29.4412143+00:00",
+      "cpu_percent": 400.38,
+      "memory_usage": "344.3MiB / 7.676GiB",
+      "memory_percent": 4.38,
+      "network_io": "24.2MB / 17.1MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 32,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:03:35.7342120+00:00",
+      "cpu_percent": 238.01,
+      "memory_usage": "529.4MiB / 7.676GiB",
+      "memory_percent": 6.73,
+      "network_io": "33.1MB / 23MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 32,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:03:42.0328220+00:00",
+      "cpu_percent": 218.23,
+      "memory_usage": "520.1MiB / 7.676GiB",
+      "memory_percent": 6.62,
+      "network_io": "41.8MB / 28.8MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 33,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:03:48.5128884+00:00",
+      "cpu_percent": 216.06,
+      "memory_usage": "516.6MiB / 7.676GiB",
+      "memory_percent": 6.57,
+      "network_io": "50.7MB / 34.7MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 33,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:03:54.8192778+00:00",
+      "cpu_percent": 294.67,
+      "memory_usage": "494.9MiB / 7.676GiB",
+      "memory_percent": 6.3,
+      "network_io": "59.6MB / 40.6MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 33,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:04:01.2113381+00:00",
+      "cpu_percent": 247.97,
+      "memory_usage": "530.1MiB / 7.676GiB",
+      "memory_percent": 6.74,
+      "network_io": "68.1MB / 46.3MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 33,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:04:08.5032192+00:00",
+      "cpu_percent": 208.55,
+      "memory_usage": "543.1MiB / 7.676GiB",
+      "memory_percent": 6.91,
+      "network_io": "78.7MB / 54MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 33,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:04:14.7950294+00:00",
+      "cpu_percent": 220.02,
+      "memory_usage": "520.7MiB / 7.676GiB",
+      "memory_percent": 6.62,
+      "network_io": "87.5MB / 59.9MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 33,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:04:21.1047146+00:00",
+      "cpu_percent": 410.42,
+      "memory_usage": "518.2MiB / 7.676GiB",
+      "memory_percent": 6.59,
+      "network_io": "96MB / 65.6MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 33,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:04:27.5860744+00:00",
+      "cpu_percent": 200.8,
+      "memory_usage": "533.8MiB / 7.676GiB",
+      "memory_percent": 6.79,
+      "network_io": "105MB / 71.5MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:04:33.8929954+00:00",
+      "cpu_percent": 223.39,
+      "memory_usage": "520.3MiB / 7.676GiB",
+      "memory_percent": 6.62,
+      "network_io": "114MB / 77.2MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:04:40.1722881+00:00",
+      "cpu_percent": 224.38,
+      "memory_usage": "518.2MiB / 7.676GiB",
+      "memory_percent": 6.59,
+      "network_io": "122MB / 83MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:04:46.4863613+00:00",
+      "cpu_percent": 421.7,
+      "memory_usage": "522.3MiB / 7.676GiB",
+      "memory_percent": 6.64,
+      "network_io": "131MB / 88.7MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:04:52.7778659+00:00",
+      "cpu_percent": 215.07,
+      "memory_usage": "534.2MiB / 7.676GiB",
+      "memory_percent": 6.8,
+      "network_io": "140MB / 94.5MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:04:59.5686374+00:00",
+      "cpu_percent": 207.94,
+      "memory_usage": "530.7MiB / 7.676GiB",
+      "memory_percent": 6.75,
+      "network_io": "149MB / 101MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:05:05.8671482+00:00",
+      "cpu_percent": 271.69,
+      "memory_usage": "544.8MiB / 7.676GiB",
+      "memory_percent": 6.93,
+      "network_io": "158MB / 107MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:05:12.1822259+00:00",
+      "cpu_percent": 361.58,
+      "memory_usage": "415.7MiB / 7.676GiB",
+      "memory_percent": 5.29,
+      "network_io": "167MB / 113MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:05:18.5358882+00:00",
+      "cpu_percent": 261.13,
+      "memory_usage": "531.3MiB / 7.676GiB",
+      "memory_percent": 6.76,
+      "network_io": "176MB / 119MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:05:24.8353001+00:00",
+      "cpu_percent": 209.5,
+      "memory_usage": "525.6MiB / 7.676GiB",
+      "memory_percent": 6.69,
+      "network_io": "184MB / 125MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:05:31.1355720+00:00",
+      "cpu_percent": 288.54,
+      "memory_usage": "517.1MiB / 7.676GiB",
+      "memory_percent": 6.58,
+      "network_io": "193MB / 131MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:05:37.5566962+00:00",
+      "cpu_percent": 262.62,
+      "memory_usage": "535.4MiB / 7.676GiB",
+      "memory_percent": 6.81,
+      "network_io": "202MB / 137MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:05:43.8731920+00:00",
+      "cpu_percent": 227.82,
+      "memory_usage": "527.5MiB / 7.676GiB",
+      "memory_percent": 6.71,
+      "network_io": "211MB / 142MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:05:50.1503537+00:00",
+      "cpu_percent": 67.04,
+      "memory_usage": "516MiB / 7.676GiB",
+      "memory_percent": 6.56,
+      "network_io": "216MB / 146MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    },
+    {
+      "timestamp": "2026-09-06T06:05:57.4577037+00:00",
+      "cpu_percent": 0.84,
+      "memory_usage": "512MiB / 7.676GiB",
+      "memory_percent": 6.51,
+      "network_io": "217MB / 146MB",
+      "block_io": "1.97MB / 1.94MB",
+      "pids": 34,
+      "restart_count": 0
+    }
+  ]
+}

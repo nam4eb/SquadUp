@@ -25,6 +25,16 @@ class ActivityItem {
   final bool likedByMe;
   final bool hasChat;
   final double? distanceKm;
+  final String? sportId;
+  final String? sportName;
+  final String? sportSlug;
+  final double? latitude;
+  final double? longitude;
+  final int? skillMin;
+  final int? skillMax;
+  final String? matchFormat;
+  final double? fee;
+  final String? currency;
 
   const ActivityItem({
     required this.id,
@@ -53,6 +63,16 @@ class ActivityItem {
     required this.likedByMe,
     required this.hasChat,
     required this.distanceKm,
+    required this.sportId,
+    required this.sportName,
+    required this.sportSlug,
+    required this.latitude,
+    required this.longitude,
+    required this.skillMin,
+    required this.skillMax,
+    required this.matchFormat,
+    required this.fee,
+    required this.currency,
   });
 
   factory ActivityItem.fromJson(Map<String, dynamic> json) {
@@ -60,6 +80,8 @@ class ActivityItem {
     final topic = json['topic'] as Map<String, dynamic>? ?? const {};
     final category = json['category'] as Map<String, dynamic>? ?? const {};
     final location = json['location'] as Map<String, dynamic>? ?? const {};
+    final sport = json['sport'] as Map<String, dynamic>? ?? const {};
+    final skillRange = json['skill_range'] as Map<String, dynamic>? ?? const {};
     return ActivityItem(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -89,6 +111,16 @@ class ActivityItem {
       likedByMe: json['liked_by_me'] as bool? ?? false,
       hasChat: json['has_chat'] as bool? ?? false,
       distanceKm: (json['distance_km'] as num?)?.toDouble(),
+      sportId: sport['id'] as String?,
+      sportName: sport['name'] as String?,
+      sportSlug: sport['slug'] as String?,
+      latitude: (location['latitude'] as num?)?.toDouble(),
+      longitude: (location['longitude'] as num?)?.toDouble(),
+      skillMin: skillRange['min'] as int?,
+      skillMax: skillRange['max'] as int?,
+      matchFormat: json['match_format'] as String?,
+      fee: (json['fee'] as num?)?.toDouble(),
+      currency: json['currency'] as String?,
     );
   }
 }

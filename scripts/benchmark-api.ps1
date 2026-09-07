@@ -26,7 +26,9 @@ function Invoke-TimedRequest {
         $watch.Stop()
         $queryCount = if ($response.Headers.Contains('X-DB-Query-Count')) { [int]($response.Headers.GetValues('X-DB-Query-Count') | Select-Object -First 1) } else { $null }
         $serverTiming = if ($response.Headers.Contains('Server-Timing')) { ($response.Headers.GetValues('Server-Timing') | Select-Object -First 1) } else { $null }
-        [pscustomobject]@{ Status = [int]$response.StatusCode; DurationMs = $watch.Elapsed.TotalMilliseconds; Body = $content; QueryCount = $queryCount; ServerTiming = $serverTiming }
+        $databaseMs = if ($serverTiming -match 'db;dur=([0-9.]+)') { [double]$Matches[1] } else { $null }
+        $applicationMs = if ($serverTiming -match 'app;dur=([0-9.]+)') { [double]$Matches[1] } else { $null }
+        [pscustomobject]@{ Status = [int]$response.StatusCode; DurationMs = $watch.Elapsed.TotalMilliseconds; Body = $content; QueryCount = $queryCount; ServerTiming = $serverTiming; DatabaseMs = $databaseMs; ApplicationMs = $applicationMs }
     } catch {
         $watch.Stop()
         [pscustomobject]@{ Status = 0; DurationMs = $watch.Elapsed.TotalMilliseconds; Body = $_.Exception.Message }
@@ -68,6 +70,8 @@ foreach ($target in $targets) {
     $statusCodes = ($samples | Group-Object Status | Sort-Object Name | ForEach-Object { "$($_.Name):$($_.Count)" }) -join ","
     $firstError = $samples | Where-Object { $_.Status -lt 200 -or $_.Status -ge 300 } | Select-Object -First 1
     $queryCounts = @($samples | Where-Object { $null -ne $_.QueryCount } | ForEach-Object QueryCount)
+    $databaseDurations = [double[]]@($samples | Where-Object { $null -ne $_.DatabaseMs } | ForEach-Object DatabaseMs)
+    $applicationDurations = [double[]]@($samples | Where-Object { $null -ne $_.ApplicationMs } | ForEach-Object ApplicationMs)
     $report += [pscustomobject]@{
         Endpoint = $target.Name
         Requests = $Requests
@@ -75,7 +79,10 @@ foreach ($target in $targets) {
         StatusCodes = $statusCodes
         FirstError = if ($firstError) { $firstError.Body.Substring(0, [Math]::Min(300, $firstError.Body.Length)) } else { $null }
         QueryCount = if ($queryCounts.Count -gt 0) { [Math]::Round(($queryCounts | Measure-Object -Average).Average, 2) } else { $null }
-        ServerTiming = ($samples | Select-Object -Last 1).ServerTiming
+        DatabaseAvgMs = if ($databaseDurations.Count -gt 0) { [Math]::Round(($databaseDurations | Measure-Object -Average).Average, 2) } else { $null }
+        DatabaseP95Ms = if ($databaseDurations.Count -gt 0) { [Math]::Round((Get-Percentile $databaseDurations 0.95), 2) } else { $null }
+        ApplicationAvgMs = if ($applicationDurations.Count -gt 0) { [Math]::Round(($applicationDurations | Measure-Object -Average).Average, 2) } else { $null }
+        ApplicationP95Ms = if ($applicationDurations.Count -gt 0) { [Math]::Round((Get-Percentile $applicationDurations 0.95), 2) } else { $null }
         MinMs = [Math]::Round(($durations | Measure-Object -Minimum).Minimum, 2)
         P50Ms = [Math]::Round((Get-Percentile $durations 0.50), 2)
         P95Ms = [Math]::Round((Get-Percentile $durations 0.95), 2)
@@ -89,4 +96,5 @@ if ($OutputPath) {
     Write-Host "Saved report to $OutputPath"
 }
 
+$null = Invoke-TimedRequest -Method POST -Url "$BaseUrl/auth/logout"
 $client.Dispose()
