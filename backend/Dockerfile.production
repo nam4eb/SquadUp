@@ -1,0 +1,51 @@
+FROM serversideup/php:8.3-fpm-nginx-alpine@sha256:988dd02f9f7d17fdaa72d2cc8b1b91be9f4586660bc9ad78f1b6618bc65de014
+
+USER root
+
+RUN install-php-extensions intl sockets
+COPY --from=composer:2@sha256:4d71c3c2109c61d5415544264b59ad4087e4c5b7244481723664138fd36d5040 /usr/bin/composer /usr/local/bin/composer
+
+WORKDIR /var/www/html
+
+COPY --chown=www-data:www-data composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --no-scripts \
+    --prefer-dist \
+    --optimize-autoloader \
+    --classmap-authoritative
+
+COPY --chown=www-data:www-data . .
+COPY docker/production-opcache.ini /usr/local/etc/php/conf.d/zz-production-opcache.ini
+
+RUN mkdir -p \
+      storage/app/public \
+      storage/framework/cache \
+      storage/framework/sessions \
+      storage/framework/views \
+      storage/logs \
+      bootstrap/cache
+
+RUN composer dump-autoload \
+    --no-dev \
+    --optimize \
+    --classmap-authoritative
+
+RUN chown -R www-data:www-data storage bootstrap/cache
+
+USER www-data
+
+ENV APP_BASE_DIR=/var/www/html \
+    AUTORUN_ENABLED=true \
+    AUTORUN_LARAVEL_MIGRATION=true \
+    AUTORUN_LARAVEL_MIGRATION_ISOLATION=true \
+    AUTORUN_LARAVEL_MIGRATION_FORCE=true \
+    AUTORUN_LARAVEL_MIGRATION_SEED=false \
+    AUTORUN_LARAVEL_STORAGE_LINK=true \
+    AUTORUN_LARAVEL_OPTIMIZE=true \
+    PHP_OPCACHE_ENABLE=1 \
+    PHP_OPCACHE_VALIDATE_TIMESTAMPS=0
+
+EXPOSE 8080

@@ -1,0 +1,19 @@
+ARG BASE_IMAGE=squadup-api-production:latest
+FROM ${BASE_IMAGE}
+
+USER root
+
+RUN php artisan octane:install --server=roadrunner --no-interaction \
+    && chown -R www-data:www-data config bootstrap/cache .rr.yaml rr \
+    && chmod +x rr
+
+USER www-data
+
+ENV AUTORUN_ENABLED=false \
+    OCTANE_SERVER=roadrunner \
+    OCTANE_WORKERS=8 \
+    OCTANE_MAX_REQUESTS=500
+
+EXPOSE 8000
+
+CMD ["sh", "-c", "php artisan octane:start --server=roadrunner --host=0.0.0.0 --port=8000 --workers=${OCTANE_WORKERS} --max-requests=${OCTANE_MAX_REQUESTS}"]
