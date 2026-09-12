@@ -158,7 +158,7 @@ services:
       REVERB_SCHEME: http
       REVERB_SCALING_ENABLED: "true"
     ports:
-      - "8080:8080"
+      - "${REVERB_FORWARD_PORT:-8080}:8080"
     volumes:
       - ./backend:/app
     depends_on:

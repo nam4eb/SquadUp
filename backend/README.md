@@ -8,7 +8,7 @@ From the repository root:
 
 ```bash
 docker compose up -d --build
-docker compose exec api php artisan test
+docker compose --profile test run --rm --build test
 ```
 
 API: `http://localhost:8000/api/v1`; health: `http://localhost:8000/up`.

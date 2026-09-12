@@ -11,11 +11,26 @@ Docker provides PHP 8.3, PostgreSQL 16, Redis 7, Laravel Reverb and a queue
 worker:
 
 ```bash
+cp backend/.env.example backend/.env
+docker compose build
+docker compose run --rm --no-deps api composer install --no-interaction --prefer-dist
+docker compose run --rm --no-deps api php artisan key:generate
 docker compose up -d --build
 docker compose exec api php artisan migrate --force
 docker compose exec api php artisan storage:link
-docker compose exec api php artisan test
+docker compose --profile test run --rm --build test
 ```
+
+On PowerShell, use `Copy-Item backend/.env.example backend/.env` for the first
+command. Copy the example only on first setup; keep an existing `.env` and
+application key. The development containers mount `backend` from the host, so
+Composer dependencies must be installed before starting the API. The checkout
+must include `backend/Dockerfile`, `backend/artisan`, and `backend/composer.lock`.
+
+Run tests with the dedicated `test` service so database and queue settings are
+isolated from the running API. If port 8080 is occupied, set
+`REVERB_FORWARD_PORT=8081` in the root `.env`, then start Flutter with
+`flutter run -d web-server --web-port 3000 --dart-define=REVERB_PORT=8081`.
 
 Migrations are a deliberate release/development step and are not run by the
 API container startup command. This avoids concurrent migration races when

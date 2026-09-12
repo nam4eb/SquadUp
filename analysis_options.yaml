@@ -14,6 +14,10 @@ analyzer:
     # Legacy generator output duplicated outside lib/. The application uses
     # lib/presentation exclusively.
     - presentation/**
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
 
 linter:
   # The lint rules applied to this project can be customized in the
