@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../features/activities/data/activities_repository.dart';
 import '../../core/network/api_error.dart';
 import '../../features/activities/domain/activity_item.dart';
 import '../../features/activities/presentation/activity_thumbnail.dart';
 import '../../features/friends/data/friends_repository.dart';
+import '../../features/stories/data/stories_repository.dart';
 import '../../routes/app_routes.dart';
 
 class ActivityDetailScreen extends ConsumerWidget {
@@ -113,6 +115,14 @@ class ActivityDetailScreen extends ConsumerWidget {
             const SizedBox(height: 20),
             Text('Participants', style: Theme.of(context).textTheme.titleLarge),
             _Participants(activity: activity),
+            if (activity.status == 'completed' &&
+                (activity.isHost ||
+                    activity.viewerParticipation == 'attended')) ...[
+              const SizedBox(height: 16),
+              _RatingAction(activity: activity),
+              const SizedBox(height: 8),
+              _PostMatchStoryAction(activity: activity),
+            ],
             if (activity.canManage) ...[
               const SizedBox(height: 20),
               _HostControls(activity: activity),
@@ -998,4 +1008,274 @@ class _Info extends StatelessWidget {
       ],
     ),
   );
+}
+
+class _RatingAction extends ConsumerStatefulWidget {
+  const _RatingAction({required this.activity});
+  final ActivityItem activity;
+
+  @override
+  ConsumerState<_RatingAction> createState() => _RatingActionState();
+}
+
+class _RatingActionState extends ConsumerState<_RatingAction> {
+  bool _loading = false;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: _loading ? null : _open,
+    icon: const Icon(Icons.star_outline),
+    label: Text(_loading ? 'Loading…' : 'Rate players'),
+  );
+
+  Future<void> _open() async {
+    setState(() => _loading = true);
+    try {
+      final targets = await ref
+          .read(activitiesRepositoryProvider)
+          .ratingTargets(widget.activity.id);
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Rate players',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 12),
+                if (targets.isEmpty) const Text('No eligible players to rate.'),
+                ...targets.map(
+                  (target) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(target.displayName),
+                    trailing: target.rated
+                        ? const Chip(label: Text('Rated'))
+                        : FilledButton.tonal(
+                            onPressed: () => _rate(context, target),
+                            child: const Text('Rate'),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              apiErrorMessage(error, fallback: 'Unable to load ratings.'),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _rate(
+    BuildContext sheetContext,
+    ActivityRatingTarget target,
+  ) async {
+    var sportsmanship = 5.0;
+    var skill = 5.0;
+    var reliability = 5.0;
+    final comment = TextEditingController();
+    final submitted = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Rate ${target.displayName}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _score(
+                  'Sportsmanship',
+                  sportsmanship,
+                  (value) => setDialogState(() => sportsmanship = value),
+                ),
+                _score(
+                  'Skill',
+                  skill,
+                  (value) => setDialogState(() => skill = value),
+                ),
+                _score(
+                  'Reliability',
+                  reliability,
+                  (value) => setDialogState(() => reliability = value),
+                ),
+                TextField(
+                  controller: comment,
+                  maxLength: 500,
+                  decoration: const InputDecoration(
+                    labelText: 'Comment (optional)',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (submitted == true) {
+      try {
+        await ref
+            .read(activitiesRepositoryProvider)
+            .rate(
+              widget.activity.id,
+              target.id,
+              sportsmanship: sportsmanship.round(),
+              skill: skill.round(),
+              reliability: reliability.round(),
+              comment: comment.text,
+            );
+        if (sheetContext.mounted) Navigator.pop(sheetContext);
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Rating submitted.')));
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                apiErrorMessage(error, fallback: 'Unable to submit rating.'),
+              ),
+            ),
+          );
+        }
+      }
+    }
+    comment.dispose();
+  }
+
+  Widget _score(String label, double value, ValueChanged<double> onChanged) =>
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('$label: ${value.round()}/5'),
+          Slider(
+            value: value,
+            min: 1,
+            max: 5,
+            divisions: 4,
+            onChanged: onChanged,
+          ),
+        ],
+      );
+}
+
+class _PostMatchStoryAction extends ConsumerStatefulWidget {
+  const _PostMatchStoryAction({required this.activity});
+  final ActivityItem activity;
+
+  @override
+  ConsumerState<_PostMatchStoryAction> createState() =>
+      _PostMatchStoryActionState();
+}
+
+class _PostMatchStoryActionState extends ConsumerState<_PostMatchStoryAction> {
+  bool _uploading = false;
+
+  @override
+  Widget build(BuildContext context) => OutlinedButton.icon(
+    onPressed: _uploading ? null : _create,
+    icon: const Icon(Icons.auto_stories_outlined),
+    label: Text(_uploading ? 'Publishing…' : 'Share match story'),
+  );
+
+  Future<void> _create() async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const [
+        'jpg',
+        'jpeg',
+        'png',
+        'webp',
+        'gif',
+        'mp4',
+        'mov',
+        'webm',
+      ],
+      withData: true,
+    );
+    if (picked == null || !mounted) return;
+    final caption = TextEditingController(text: widget.activity.title);
+    final submit = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Share match story'),
+        content: TextField(
+          controller: caption,
+          maxLength: 500,
+          decoration: const InputDecoration(labelText: 'Caption'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Share'),
+          ),
+        ],
+      ),
+    );
+    if (submit != true) {
+      caption.dispose();
+      return;
+    }
+    setState(() => _uploading = true);
+    try {
+      await ref
+          .read(storiesRepositoryProvider)
+          .create(
+            picked.files.single,
+            caption: caption.text,
+            activityId: widget.activity.id,
+          );
+      ref.invalidate(storiesProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Match story published.')));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              apiErrorMessage(error, fallback: 'Unable to publish story.'),
+            ),
+          ),
+        );
+      }
+    } finally {
+      caption.dispose();
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
 }

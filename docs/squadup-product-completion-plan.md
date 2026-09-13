@@ -76,3 +76,45 @@
   now has stale-client regression coverage. A true parallel HTTP test remains
   gated on an isolated PostgreSQL test database (the default suite uses
   in-memory SQLite).
+- P0-E in progress: chat now uses stale-while-revalidate conversation cache,
+  reconnects/resynchronizes on app resume, keeps idempotent client message IDs,
+  and routes opened push notifications to conversations or activity detail.
+  Backend conversation access paths and latest-message loading are optimized.
+- P0-E substantially complete: text messages now have a bounded encrypted
+  seven-day outbox and retry with the original idempotency key.
+- P1-A in progress: completed activities support one rating per rater/ratee,
+  strict attendance eligibility, three rating dimensions, public reputation
+  aggregates and deterministic per-sport skill confidence updates. Mobile has
+  the post-match rating flow.
+- P1-B in progress: stories can link to completed activities for hosts and
+  attendees, post-match sharing is available on mobile, and block/report rules
+  now cover Story and Rating. Reputation is presented on the user profile.
+- P1-B substantially complete: Story viewer includes activity navigation,
+  delete/report controls, and People Discovery filters by sport, skill and
+  city. P2 has started by restoring system text scaling for accessibility.
+- P2 in progress: the default home activity feed now has a bounded persistent
+  stale-while-revalidate cache, and mobile API latency/cache-hit telemetry is
+  buffered locally in privacy-safe five-second batches. Flutter static analysis
+  and smoke tests pass; targeted backend regression coverage passes (21 tests,
+  111 assertions).
+- P2 moderation now accepts rating reports only from the affected ratee and
+  exposes an immutable Activity Ratings evidence table in Filament. Resolution
+  remains in the existing Reports workflow so every administrative decision is
+  audit logged.
+- Rating moderation is reversible: admins can invalidate or restore evidence
+  without deleting it, every action is audit logged, and reputation/per-sport
+  skill aggregates are recalculated from active ratings only.
+- Chat now exposes live connection/connecting/degraded state, keeps REST as an
+  explicit fallback, offers manual reconnect and load retry actions, and shows
+  sending/failed/delivered/read states for outgoing text messages.
+- Profile history tab changes now issue only the scoped history request, retain
+  rendered profile/reputation content while loading, and ignore stale responses
+  from rapid tab changes.
+- Docker migrations are applied through `2026_09_13_030000`. A packaged local
+  Octane/RoadRunner runtime on port 8001 avoids Windows bind-mount bootstrap
+  overhead and serves warm requests in roughly 4-18 ms; the port-8000 service
+  remains available for live PHP editing.
+- P0-E media outbox is complete for mobile: selected attachments are copied to
+  app-support storage before upload, retried with the original idempotency key,
+  restored across sessions, capped at 20 MB per file/50 MB total/50 items, and
+  automatically deleted after success, eviction or seven-day expiry.

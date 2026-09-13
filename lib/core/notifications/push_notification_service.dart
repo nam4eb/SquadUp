@@ -13,7 +13,11 @@ class PushNotificationService {
 
   final Dio _dio;
   StreamSubscription<String>? _refreshSubscription;
+  StreamSubscription<RemoteMessage>? _openedSubscription;
+  final _openedController = StreamController<Map<String, dynamic>>.broadcast();
   bool _started = false;
+
+  Stream<Map<String, dynamic>> get opened => _openedController.stream;
 
   Future<void> start() async {
     if (_started) return;
@@ -27,6 +31,11 @@ class PushNotificationService {
       final token = await messaging.getToken();
       if (token != null) await _register(token);
       _refreshSubscription = messaging.onTokenRefresh.listen(_register);
+      _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+        (message) => _openedController.add(message.data),
+      );
+      final initial = await messaging.getInitialMessage();
+      if (initial != null) _openedController.add(initial.data);
       _started = true;
     } catch (_) {
       // Firebase platform credentials are deployment configuration. The rest
@@ -52,6 +61,8 @@ class PushNotificationService {
 
   void dispose() {
     _refreshSubscription?.cancel();
+    _openedSubscription?.cancel();
+    _openedController.close();
   }
 }
 

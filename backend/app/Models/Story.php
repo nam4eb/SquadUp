@@ -11,7 +11,7 @@ class Story extends Model
 {
     use HasUuids;
 
-    protected $fillable = ['user_id', 'media_disk', 'media_path', 'thumbnail_path', 'media_type', 'duration_ms', 'caption', 'visibility', 'expires_at'];
+    protected $fillable = ['user_id', 'activity_id', 'media_disk', 'media_path', 'thumbnail_path', 'media_type', 'duration_ms', 'caption', 'visibility', 'expires_at'];
 
     protected function casts(): array
     {
@@ -26,5 +26,10 @@ class Story extends Model
     public function views(): HasMany
     {
         return $this->hasMany(StoryView::class);
+    }
+
+    public function activity(): BelongsTo
+    {
+        return $this->belongsTo(Activity::class);
     }
 }

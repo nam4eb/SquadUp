@@ -9,10 +9,22 @@ class FriendsRepository {
 
   FriendsRepository(this._dio);
 
-  Future<List<SocialUser>> search([String query = '']) async {
+  Future<List<SocialUser>> search(
+    String query, {
+    String? sportId,
+    int? skillMin,
+    int? skillMax,
+    String? city,
+  }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/users',
-      queryParameters: {'query': query},
+      queryParameters: {
+        'query': query,
+        if (sportId != null) 'sport_id': sportId,
+        if (skillMin != null) 'skill_min': skillMin,
+        if (skillMax != null) 'skill_max': skillMax,
+        if (city?.trim().isNotEmpty == true) 'city': city!.trim(),
+      },
     );
     return _users(response.data!['data'] as List);
   }

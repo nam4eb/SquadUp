@@ -7,6 +7,7 @@ use App\Actions\Friends\SendFriendRequest;
 use App\Models\Block;
 use App\Models\Friendship;
 use App\Models\User;
+use App\Models\Sport;
 use App\Support\UserPair;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -53,6 +54,27 @@ class SocialGraphTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $match->id)
             ->assertJsonPath('data.0.email', null);
+    }
+
+    public function test_people_discovery_filters_by_sport_skill_and_city(): void
+    {
+        $viewer = User::factory()->create();
+        $sport = Sport::create(['name' => 'Pickleball', 'slug' => 'pickleball']);
+        $match = User::factory()->create(['default_city' => 'Bangkok']);
+        $other = User::factory()->create(['default_city' => 'Bangkok']);
+        $match->sportProfiles()->create([
+            'sport_id' => $sport->id, 'self_declared_level' => 'intermediate', 'skill_rating' => 1350,
+        ]);
+        $other->sportProfiles()->create([
+            'sport_id' => $sport->id, 'self_declared_level' => 'beginner', 'skill_rating' => 800,
+        ]);
+        Sanctum::actingAs($viewer);
+
+        $this->getJson("/api/v1/users?sport_id={$sport->id}&skill_min=1200&skill_max=1500&city=bangkok")
+            ->assertOk()->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $match->id)
+            ->assertJsonPath('data.0.sports.0.sport.slug', 'pickleball')
+            ->assertJsonPath('data.0.sports.0.skill_rating', 1350);
     }
 
     public function test_user_can_send_friend_request_and_duplicates_are_prevented(): void

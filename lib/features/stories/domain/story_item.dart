@@ -11,6 +11,8 @@ class StoryItem {
   final bool viewedByMe;
   final bool isMine;
   final DateTime expiresAt;
+  final String? activityId;
+  final String? activityTitle;
 
   const StoryItem({
     required this.id,
@@ -25,10 +27,13 @@ class StoryItem {
     required this.viewedByMe,
     required this.isMine,
     required this.expiresAt,
+    required this.activityId,
+    required this.activityTitle,
   });
 
   factory StoryItem.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map<String, dynamic>? ?? const {};
+    final activity = json['activity'] as Map<String, dynamic>? ?? const {};
     return StoryItem(
       id: json['id'] as String,
       userId: user['id'] as String,
@@ -42,6 +47,8 @@ class StoryItem {
       viewedByMe: json['viewed_by_me'] as bool? ?? false,
       isMine: json['is_mine'] as bool? ?? false,
       expiresAt: DateTime.parse(json['expires_at'] as String),
+      activityId: activity['id'] as String?,
+      activityTitle: activity['title'] as String?,
     );
   }
 }

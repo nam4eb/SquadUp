@@ -123,6 +123,7 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./backend/docker/development-opcache.ini:/usr/local/etc/php/conf.d/zz-development-opcache.ini:ro
     depends_on:
       postgres:
         condition: service_healthy

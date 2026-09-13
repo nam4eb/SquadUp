@@ -20,6 +20,10 @@ class UserController extends Controller
         $validated = $request->validate([
             'query' => ['nullable', 'string', 'max:80'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'sport_id' => ['nullable', 'uuid', 'exists:sports,id'],
+            'skill_min' => ['nullable', 'integer', 'between:800,2400'],
+            'skill_max' => ['nullable', 'integer', 'between:800,2400', 'gte:skill_min'],
+            'city' => ['nullable', 'string', 'max:120'],
         ]);
         $query = trim($validated['query'] ?? '');
         $blockedUserIds = Block::query()
@@ -27,6 +31,8 @@ class UserController extends Controller
             ->merge(Block::query()->where('blocked_id', $request->user()->id)->pluck('blocker_id'));
 
         $users = User::query()
+            ->with(['sportProfiles' => fn ($profiles) => $profiles
+                ->with('sport')->when($validated['sport_id'] ?? null, fn ($query, $id) => $query->where('sport_id', $id))])
             ->where('account_status', AccountStatus::Active)
             ->whereKeyNot($request->user()->id)
             ->whereNotIn('id', $blockedUserIds)
@@ -36,6 +42,15 @@ class UserController extends Controller
                         ->orWhere('display_name', 'like', "%{$query}%");
                 });
             })
+            ->when($validated['city'] ?? null, fn ($builder, $city) => $builder
+                ->whereRaw('LOWER(default_city) = ?', [mb_strtolower($city)]))
+            ->when(
+                ($validated['sport_id'] ?? null) || isset($validated['skill_min']) || isset($validated['skill_max']),
+                fn ($builder) => $builder->whereHas('sportProfiles', fn ($profiles) => $profiles
+                    ->when($validated['sport_id'] ?? null, fn ($q, $id) => $q->where('sport_id', $id))
+                    ->when($validated['skill_min'] ?? null, fn ($q, $min) => $q->where('skill_rating', '>=', $min))
+                    ->when($validated['skill_max'] ?? null, fn ($q, $max) => $q->where('skill_rating', '<=', $max)))
+            )
             ->orderBy('username')
             ->paginate($validated['per_page'] ?? 20);
 

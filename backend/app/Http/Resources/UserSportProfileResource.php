@@ -16,6 +16,7 @@ class UserSportProfileResource extends JsonResource
             'verified_level' => $this->verified_level,
             'display_level' => $this->verified_level ?? $this->self_declared_level,
             'matches_played' => $this->matches_played,
+            'skill_rating' => $this->skill_rating,
             'rating_confidence' => $this->rating_confidence,
         ];
     }

@@ -26,7 +26,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   String _scope = 'upcoming';
   AuthUser? _user;
   List<ActivityItem> _activities = const [];
+  UserReputationItem? _reputation;
   bool _loading = true;
+  bool _loadingActivities = false;
+  int _historyRequest = 0;
   String? _error;
 
   @override
@@ -63,6 +66,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               padding: const EdgeInsets.only(bottom: 24),
               children: [
                 _ProfileHeader(user: _user!),
+                if (_reputation != null) _ReputationCard(value: _reputation!),
                 const SizedBox(height: 16),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -82,7 +86,12 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         .toList(),
                   ),
                 ),
-                if (_activities.isEmpty)
+                if (_loadingActivities)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: LinearProgressIndicator(),
+                  ),
+                if (_activities.isEmpty && !_loadingActivities)
                   const Padding(
                     padding: EdgeInsets.all(32),
                     child: Center(
@@ -121,14 +130,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       _error = null;
     });
     try {
+      final user = await ref.read(authRepositoryProvider).me();
       final values = await Future.wait([
-        ref.read(authRepositoryProvider).me(),
         ref.read(activitiesRepositoryProvider).history(_scope),
+        ref.read(activitiesRepositoryProvider).reputation(user.id),
       ]);
       if (mounted) {
         setState(() {
-          _user = values[0] as AuthUser;
-          _activities = values[1] as List<ActivityItem>;
+          _user = user;
+          _activities = values[0] as List<ActivityItem>;
+          _reputation = values[1] as UserReputationItem;
           _loading = false;
         });
       }
@@ -145,7 +156,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _changeScope(String value) async {
     if (_scope == value) return;
     setState(() => _scope = value);
-    await _load();
+    final request = ++_historyRequest;
+    setState(() => _loadingActivities = true);
+    try {
+      final activities = await ref
+          .read(activitiesRepositoryProvider)
+          .history(value);
+      if (mounted && request == _historyRequest) {
+        setState(() => _activities = activities);
+      }
+    } catch (_) {
+      if (mounted && request == _historyRequest) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to load this activity list.')),
+        );
+      }
+    } finally {
+      if (mounted && request == _historyRequest) {
+        setState(() => _loadingActivities = false);
+      }
+    }
   }
 
   static String _date(DateTime value) =>
@@ -211,6 +241,56 @@ class _ProfileHeader extends StatelessWidget {
             ],
           ),
         ),
+    ],
+  );
+}
+
+class _ReputationCard extends StatelessWidget {
+  const _ReputationCard({required this.value});
+  final UserReputationItem value;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    margin: const EdgeInsets.symmetric(horizontal: 16),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Reputation',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const Spacer(),
+              Text('${value.ratingsCount} ratings'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 18,
+            runSpacing: 10,
+            children: [
+              _metric('Sportsmanship', value.sportsmanship, '/5'),
+              _metric('Skill', value.skill, '/5'),
+              _metric('Reliability', value.reliability, '/5'),
+              _metric('Attendance', value.attendanceRate * 100, '%'),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _metric(String label, double number, String suffix) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: const TextStyle(fontSize: 12)),
+      Text(
+        '${number.toStringAsFixed(suffix == '%' ? 0 : 1)}$suffix',
+        style: const TextStyle(fontWeight: FontWeight.bold),
+      ),
     ],
   );
 }

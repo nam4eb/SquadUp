@@ -6,13 +6,32 @@ import '../../../routes/app_routes.dart';
 import '../../../theme/app_theme.dart';
 import '../application/friends_controller.dart';
 import '../domain/social_user.dart';
+import '../../onboarding/data/onboarding_repository.dart';
 
-class FriendsScreen extends ConsumerWidget {
+class FriendsScreen extends ConsumerStatefulWidget {
   const FriendsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FriendsScreen> createState() => _FriendsScreenState();
+}
+
+class _FriendsScreenState extends ConsumerState<FriendsScreen> {
+  final _search = TextEditingController();
+  final _city = TextEditingController();
+  String? _sportId;
+  RangeValues _skill = const RangeValues(800, 2400);
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _city.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(friendsControllerProvider);
+    final sports = ref.watch(sportsProvider);
     return Scaffold(
       appBar: AppBar(
         title: const Text('Friends'),
@@ -36,10 +55,58 @@ class FriendsScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
             children: [
               SearchBar(
+                controller: _search,
                 hintText: 'Search people',
                 leading: const Icon(Icons.search),
-                onSubmitted: (query) =>
-                    ref.read(friendsControllerProvider.notifier).refresh(query),
+                onSubmitted: (_) => _apply(),
+              ),
+              ExpansionTile(
+                title: const Text('Discovery filters'),
+                children: [
+                  sports.when(
+                    data: (items) => DropdownButtonFormField<String?>(
+                      initialValue: _sportId,
+                      decoration: const InputDecoration(labelText: 'Sport'),
+                      items: [
+                        const DropdownMenuItem(
+                          value: null,
+                          child: Text('Any sport'),
+                        ),
+                        ...items.map(
+                          (item) => DropdownMenuItem(
+                            value: item.id,
+                            child: Text(item.name),
+                          ),
+                        ),
+                      ],
+                      onChanged: (value) => setState(() => _sportId = value),
+                    ),
+                    loading: () => const LinearProgressIndicator(),
+                    error: (_, _) => const SizedBox.shrink(),
+                  ),
+                  TextField(
+                    controller: _city,
+                    decoration: const InputDecoration(
+                      labelText: 'City (optional)',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Skill ${_skill.start.round()}–${_skill.end.round()}'),
+                  RangeSlider(
+                    min: 800,
+                    max: 2400,
+                    divisions: 16,
+                    values: _skill,
+                    onChanged: (value) => setState(() => _skill = value),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      onPressed: _apply,
+                      child: const Text('Find players'),
+                    ),
+                  ),
+                ],
               ),
               if (data.incoming.isNotEmpty) ...[
                 const _SectionTitle('Friend requests'),
@@ -66,6 +133,16 @@ class FriendsScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Future<void> _apply() => ref
+      .read(friendsControllerProvider.notifier)
+      .refresh(
+        _search.text,
+        _sportId,
+        _skill.start.round(),
+        _skill.end.round(),
+        _city.text,
+      );
 }
 
 class _RequestTile extends ConsumerWidget {
@@ -108,7 +185,11 @@ class _UserTile extends ConsumerWidget {
     leading: _Avatar(user),
     title: Text(user.displayName),
     subtitle: Text(
-      user.bio?.isNotEmpty == true ? user.bio! : '@${user.username}',
+      user.sports.isNotEmpty
+          ? user.sports.join(' • ')
+          : user.bio?.isNotEmpty == true
+          ? user.bio!
+          : '@${user.username}',
     ),
     trailing: Row(
       mainAxisSize: MainAxisSize.min,

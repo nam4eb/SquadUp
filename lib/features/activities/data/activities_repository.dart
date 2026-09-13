@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/api_client.dart';
 import '../domain/activity_item.dart';
@@ -8,7 +11,8 @@ import '../../../core/application/provider_cache.dart';
 
 class ActivitiesRepository {
   final Dio _dio;
-  ActivitiesRepository(this._dio);
+  final AuthTokenStore _tokens;
+  ActivitiesRepository(this._dio, this._tokens);
 
   Future<List<VenueOption>> venues({String? query}) async {
     final response = await _dio.get<Map<String, dynamic>>(
@@ -50,10 +54,44 @@ class ActivitiesRepository {
         'page': page,
       },
     );
-    return (response.data!['data'] as List)
+    final raw = response.data!['data'] as List;
+    if (query?.trim().isNotEmpty != true &&
+        categoryId == null &&
+        sportId == null &&
+        skill == null &&
+        matchFormat == null &&
+        !openSlots &&
+        latitude == null &&
+        page == 1) {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(await _feedCacheKey(), jsonEncode(raw));
+    }
+    return raw
         .map((item) => ActivityItem.fromJson(item as Map<String, dynamic>))
         .toList();
   }
+
+  Future<List<ActivityItem>?> cachedFeed() async {
+    final preferences = await SharedPreferences.getInstance();
+    final encoded = preferences.getString(await _feedCacheKey());
+    if (encoded == null) return null;
+    try {
+      return (jsonDecode(encoded) as List)
+          .map((item) => ActivityItem.fromJson(item as Map<String, dynamic>))
+          .where(
+            (item) =>
+                item.endsAt?.isAfter(DateTime.now()) ??
+                item.startsAt.isAfter(DateTime.now()),
+          )
+          .toList();
+    } catch (_) {
+      await preferences.remove(await _feedCacheKey());
+      return null;
+    }
+  }
+
+  Future<String> _feedCacheKey() async =>
+      'activities.feed.${(await _tokens.read())?.hashCode ?? 0}';
 
   Future<ActivityPage> nearby({
     required double latitude,
@@ -231,6 +269,35 @@ class ActivitiesRepository {
     data: {'status': status},
   );
 
+  Future<List<ActivityRatingTarget>> ratingTargets(String activityId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/activities/$activityId/ratings',
+    );
+    return (response.data!['data'] as List)
+        .map(
+          (item) => ActivityRatingTarget.fromJson(item as Map<String, dynamic>),
+        )
+        .toList();
+  }
+
+  Future<void> rate(
+    String activityId,
+    String userId, {
+    required int sportsmanship,
+    required int skill,
+    required int reliability,
+    String? comment,
+  }) => _dio.post(
+    '/activities/$activityId/ratings',
+    data: {
+      'user_id': userId,
+      'sportsmanship': sportsmanship,
+      'skill': skill,
+      'reliability': reliability,
+      if (comment?.trim().isNotEmpty == true) 'comment': comment!.trim(),
+    },
+  );
+
   Future<void> setLiked(String id, bool liked) => liked
       ? _dio.post('/activities/$id/like')
       : _dio.delete('/activities/$id/like');
@@ -272,10 +339,22 @@ class ActivitiesRepository {
       response.data!['data'] as Map<String, dynamic>,
     );
   }
+
+  Future<UserReputationItem> reputation(String userId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/users/$userId/reputation',
+    );
+    return UserReputationItem.fromJson(
+      response.data!['data'] as Map<String, dynamic>,
+    );
+  }
 }
 
 final activitiesRepositoryProvider = Provider<ActivitiesRepository>(
-  (ref) => ActivitiesRepository(ref.watch(dioProvider)),
+  (ref) => ActivitiesRepository(
+    ref.watch(dioProvider),
+    ref.watch(authTokenStoreProvider),
+  ),
 );
 
 final venuesProvider = FutureProvider<List<VenueOption>>((ref) {
@@ -311,12 +390,32 @@ class ActivityPage {
   bool get hasMore => currentPage < lastPage;
 }
 
-final activityFeedProvider = FutureProvider.autoDispose<List<ActivityItem>>((
-  ref,
-) {
-  cacheFor(ref, const Duration(minutes: 2));
-  return ref.watch(activitiesRepositoryProvider).list();
-});
+class ActivityFeedNotifier extends AsyncNotifier<List<ActivityItem>> {
+  @override
+  Future<List<ActivityItem>> build() async {
+    final repository = ref.watch(activitiesRepositoryProvider);
+    final cached = await repository.cachedFeed();
+    if (cached != null) {
+      Future<void>.microtask(() => refresh(silent: true));
+      return cached;
+    }
+    return repository.list();
+  }
+
+  Future<void> refresh({bool silent = false}) async {
+    if (!silent) state = const AsyncLoading();
+    try {
+      state = AsyncData(await ref.read(activitiesRepositoryProvider).list());
+    } catch (error, stackTrace) {
+      if (!silent || !state.hasValue) state = AsyncError(error, stackTrace);
+    }
+  }
+}
+
+final activityFeedProvider =
+    AsyncNotifierProvider<ActivityFeedNotifier, List<ActivityItem>>(
+      ActivityFeedNotifier.new,
+    );
 
 final activityDetailProvider = FutureProvider.autoDispose
     .family<ActivityItem, String>((ref, id) {

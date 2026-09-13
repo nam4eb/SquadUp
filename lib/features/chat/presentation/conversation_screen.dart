@@ -11,6 +11,7 @@ import '../../../core/network/api_client.dart';
 import '../../../routes/app_routes.dart';
 import 'package:go_router/go_router.dart';
 import '../data/chat_repository.dart';
+import '../data/chat_outbox.dart';
 import '../domain/chat_models.dart';
 
 class ConversationScreen extends ConsumerStatefulWidget {
@@ -22,7 +23,8 @@ class ConversationScreen extends ConsumerStatefulWidget {
   ConsumerState<ConversationScreen> createState() => _ConversationScreenState();
 }
 
-class _ConversationScreenState extends ConsumerState<ConversationScreen> {
+class _ConversationScreenState extends ConsumerState<ConversationScreen>
+    with WidgetsBindingObserver {
   final _message = TextEditingController();
   bool _sending = false;
   final _markedRead = <String>{};
@@ -40,17 +42,20 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scroll.addListener(_onScroll);
     Future.microtask(() {
       ref
           .read(realtimeServiceProvider)
           .subscribeConversation(widget.conversation.id, _onRealtimeEvent);
       _loadMediaHeaders();
+      _recoverOutbox();
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _typingTimer?.cancel();
     ref
         .read(chatRepositoryProvider)
@@ -65,8 +70,17 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    ref.read(realtimeServiceProvider).recover();
+    ref.invalidate(messagesProvider(widget.conversation.id));
+    _retryOutbox();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final messages = ref.watch(messagesProvider(widget.conversation.id));
+    final realtimeStatus = ref.watch(realtimeConnectionProvider).value;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.conversation.name),
@@ -84,11 +98,50 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       ),
       body: Column(
         children: [
+          if (realtimeStatus != RealtimeConnectionStatus.connected)
+            Material(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              child: ListTile(
+                dense: true,
+                leading: SizedBox.square(
+                  dimension: 18,
+                  child: realtimeStatus == RealtimeConnectionStatus.connecting
+                      ? const CircularProgressIndicator(strokeWidth: 2)
+                      : const Icon(Icons.cloud_off_outlined, size: 18),
+                ),
+                title: Text(
+                  realtimeStatus == RealtimeConnectionStatus.connecting
+                      ? 'Connecting to live chat…'
+                      : 'Live updates unavailable · messages still use REST',
+                ),
+                trailing: realtimeStatus == RealtimeConnectionStatus.degraded
+                    ? TextButton(
+                        onPressed: () =>
+                            ref.read(realtimeServiceProvider).recover(),
+                        child: const Text('Retry'),
+                      )
+                    : null,
+              ),
+            ),
           Expanded(
             child: messages.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, _) =>
-                  const Center(child: Text('Unable to load messages.')),
+              error: (_, _) => Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Unable to load messages.'),
+                    const SizedBox(height: 8),
+                    FilledButton.tonalIcon(
+                      onPressed: () => ref.invalidate(
+                        messagesProvider(widget.conversation.id),
+                      ),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              ),
               data: (page) {
                 _nextCursor ??= page.nextCursor;
                 final items = _mergeMessages([
@@ -203,6 +256,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
               if (item.reactions.isNotEmpty) Text(item.reactions.join(' ')),
               if (item.isMine && item.readCount > 0)
                 const Text('Read', style: TextStyle(fontSize: 11)),
+              if (item.isMine &&
+                  item.readCount == 0 &&
+                  item.deliveryStatus == ChatDeliveryStatus.sent)
+                const Text('Delivered', style: TextStyle(fontSize: 11)),
               if (item.deliveryStatus == ChatDeliveryStatus.sending)
                 const Text('Sending…', style: TextStyle(fontSize: 11)),
               if (item.deliveryStatus == ChatDeliveryStatus.failed)
@@ -332,6 +389,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
             clientMessageId: clientMessageId,
             replyToId: _replyingTo?.id,
           );
+      await ref.read(chatOutboxProvider).remove(clientMessageId);
       _replaceLocal(clientMessageId, sent);
       _message.clear();
       _typingTimer?.cancel();
@@ -342,6 +400,17 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
       ref.invalidate(messagesProvider(widget.conversation.id));
       ref.invalidate(conversationsProvider);
     } catch (error) {
+      await ref
+          .read(chatOutboxProvider)
+          .put(
+            ChatOutboxItem(
+              conversationId: widget.conversation.id,
+              clientMessageId: clientMessageId,
+              body: body,
+              replyToId: optimistic.replyToId,
+              createdAt: optimistic.createdAt,
+            ),
+          );
       _replaceLocal(
         clientMessageId,
         optimistic.copyWith(deliveryStatus: ChatDeliveryStatus.failed),
@@ -353,24 +422,68 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
   }
 
   Future<void> _pickAndSendFile() async {
-    final result = await FilePicker.pickFiles(withData: true);
+    final result = await FilePicker.pickFiles();
     if (result == null || !mounted) return;
+    final clientMessageId = _newClientMessageId();
+    final createdAt = DateTime.now();
+    final body = _message.text.trim();
+    final replyToId = _replyingTo?.id;
+    ChatMessageItem? optimistic;
     setState(() => _sending = true);
     try {
-      await ref
+      final outbox = ref.read(chatOutboxProvider);
+      final media = await outbox.stageMedia(
+        result.files.single,
+        clientMessageId,
+      );
+      final pending = ChatOutboxItem(
+        conversationId: widget.conversation.id,
+        clientMessageId: clientMessageId,
+        body: body,
+        replyToId: replyToId,
+        createdAt: createdAt,
+        media: media,
+      );
+      await outbox.put(pending);
+      optimistic = ChatMessageItem(
+        id: 'local-$clientMessageId',
+        clientMessageId: clientMessageId,
+        body: body.isEmpty ? 'Attachment: ${media.name}' : body,
+        senderName: 'You',
+        isMine: true,
+        isDeleted: false,
+        isEdited: false,
+        replyToId: replyToId,
+        readCount: 0,
+        reactions: const [],
+        media: const [],
+        mentions: const [],
+        createdAt: createdAt,
+        deliveryStatus: ChatDeliveryStatus.sending,
+      );
+      setState(() => _localMessages.add(optimistic!));
+      final sent = await ref
           .read(chatRepositoryProvider)
           .sendMedia(
             widget.conversation.id,
-            result.files.single,
-            clientMessageId: _newClientMessageId(),
-            body: _message.text,
-            replyToId: _replyingTo?.id,
+            media.toPlatformFile(),
+            clientMessageId: clientMessageId,
+            body: body,
+            replyToId: replyToId,
           );
+      await outbox.remove(clientMessageId);
+      _replaceLocal(clientMessageId, sent);
       _message.clear();
       setState(() => _replyingTo = null);
       ref.invalidate(messagesProvider(widget.conversation.id));
       ref.invalidate(conversationsProvider);
     } catch (error) {
+      if (optimistic != null) {
+        _replaceLocal(
+          clientMessageId,
+          optimistic.copyWith(deliveryStatus: ChatDeliveryStatus.failed),
+        );
+      }
       _showError(error);
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -473,20 +586,30 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
 
   Future<void> _retry(ChatMessageItem item) async {
     final clientId = item.clientMessageId;
-    if (clientId == null || item.body == null) return;
+    if (clientId == null) return;
+    final pending = await ref.read(chatOutboxProvider).find(clientId);
+    if (pending == null) return;
     _replaceLocal(
       clientId,
       item.copyWith(deliveryStatus: ChatDeliveryStatus.sending),
     );
     try {
-      final sent = await ref
-          .read(chatRepositoryProvider)
-          .send(
-            widget.conversation.id,
-            item.body!,
-            clientMessageId: clientId,
-            replyToId: item.replyToId,
-          );
+      final repository = ref.read(chatRepositoryProvider);
+      final sent = pending.media == null
+          ? await repository.send(
+              widget.conversation.id,
+              pending.body,
+              clientMessageId: clientId,
+              replyToId: pending.replyToId,
+            )
+          : await repository.sendMedia(
+              widget.conversation.id,
+              pending.media!.toPlatformFile(),
+              clientMessageId: clientId,
+              body: pending.body,
+              replyToId: pending.replyToId,
+            );
+      await ref.read(chatOutboxProvider).remove(clientId);
       _replaceLocal(clientId, sent);
       ref.invalidate(conversationsProvider);
     } catch (_) {
@@ -494,6 +617,56 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
         clientId,
         item.copyWith(deliveryStatus: ChatDeliveryStatus.failed),
       );
+    }
+  }
+
+  Future<void> _recoverOutbox() async {
+    final pending = await ref
+        .read(chatOutboxProvider)
+        .forConversation(widget.conversation.id);
+    if (!mounted) return;
+    setState(() {
+      for (final item in pending) {
+        if (_localMessages.any(
+          (message) => message.clientMessageId == item.clientMessageId,
+        )) {
+          continue;
+        }
+        _localMessages.add(
+          ChatMessageItem(
+            id: 'local-${item.clientMessageId}',
+            clientMessageId: item.clientMessageId,
+            body: item.body.isEmpty && item.media != null
+                ? 'Attachment: ${item.media!.name}'
+                : item.body,
+            senderName: 'You',
+            isMine: true,
+            isDeleted: false,
+            isEdited: false,
+            replyToId: item.replyToId,
+            readCount: 0,
+            reactions: const [],
+            media: const [],
+            mentions: const [],
+            createdAt: item.createdAt,
+            deliveryStatus: ChatDeliveryStatus.failed,
+          ),
+        );
+      }
+    });
+    await _retryOutbox();
+  }
+
+  Future<void> _retryOutbox() async {
+    final pending = await ref
+        .read(chatOutboxProvider)
+        .forConversation(widget.conversation.id);
+    for (final item in pending) {
+      if (!mounted) return;
+      final local = _localMessages
+          .where((message) => message.clientMessageId == item.clientMessageId)
+          .firstOrNull;
+      if (local != null) await _retry(local);
     }
   }
 

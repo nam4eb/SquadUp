@@ -13,6 +13,10 @@ class StoryResource extends JsonResource
         return [
             'id' => $this->id,
             'user' => new UserResource($this->whenLoaded('user')),
+            'activity' => $this->whenLoaded('activity', fn () => $this->activity ? [
+                'id' => $this->activity->id,
+                'title' => $this->activity->title,
+            ] : null),
             'media_url' => Storage::disk($this->media_disk)->url($this->media_path),
             'thumbnail_url' => $this->thumbnail_path
                 ? Storage::disk($this->media_disk)->url($this->thumbnail_path)

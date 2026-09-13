@@ -18,7 +18,11 @@ class StoriesRepository {
         .toList();
   }
 
-  Future<void> create(PlatformFile file, {String? caption}) async {
+  Future<void> create(
+    PlatformFile file, {
+    String? caption,
+    String? activityId,
+  }) async {
     final upload = file.bytes != null
         ? MultipartFile.fromBytes(file.bytes!, filename: file.name)
         : await MultipartFile.fromFile(file.path!, filename: file.name);
@@ -27,12 +31,20 @@ class StoriesRepository {
       data: FormData.fromMap({
         'media': upload,
         if (caption?.trim().isNotEmpty == true) 'caption': caption!.trim(),
+        if (activityId != null) 'activity_id': activityId,
         'visibility': 'friends',
       }),
     );
   }
 
   Future<void> markViewed(String id) => _dio.post('/stories/$id/view');
+
+  Future<void> delete(String id) => _dio.delete('/stories/$id');
+
+  Future<void> report(String id, {String reason = 'spam'}) => _dio.post(
+    '/reports',
+    data: {'target_type': 'story', 'target_id': id, 'reason': reason},
+  );
 }
 
 final storiesRepositoryProvider = Provider<StoriesRepository>(

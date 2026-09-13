@@ -21,11 +21,23 @@ class FriendsController extends AsyncNotifier<FriendsState> {
   FriendsRepository get _repository => ref.read(friendsRepositoryProvider);
 
   @override
-  Future<FriendsState> build() => _load();
+  Future<FriendsState> build() => _load('');
 
-  Future<FriendsState> _load([String query = '']) async {
+  Future<FriendsState> _load(
+    String query, {
+    String? sportId,
+    int? skillMin,
+    int? skillMax,
+    String? city,
+  }) async {
     final results = await Future.wait([
-      _repository.search(query),
+      _repository.search(
+        query,
+        sportId: sportId,
+        skillMin: skillMin,
+        skillMax: skillMax,
+        city: city,
+      ),
       _repository.friends(),
       _repository.incoming(),
       _repository.blocked(),
@@ -38,9 +50,23 @@ class FriendsController extends AsyncNotifier<FriendsState> {
     );
   }
 
-  Future<void> refresh([String query = '']) async {
+  Future<void> refresh([
+    String query = '',
+    String? sportId,
+    int? skillMin,
+    int? skillMax,
+    String? city,
+  ]) async {
     state = const AsyncLoading();
-    state = await AsyncValue.guard(() => _load(query));
+    state = await AsyncValue.guard(
+      () => _load(
+        query,
+        sportId: sportId,
+        skillMin: skillMin,
+        skillMax: skillMax,
+        city: city,
+      ),
+    );
   }
 
   Future<void> send(String userId) async {

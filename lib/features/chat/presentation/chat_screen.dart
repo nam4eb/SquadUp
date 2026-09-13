@@ -31,6 +31,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
     final realtime = ref.read(realtimeServiceProvider);
     if (state == AppLifecycleState.resumed) {
       realtime.startPresence();
+      realtime.recover();
+      ref.read(conversationsProvider.notifier).refresh(silent: true);
     } else if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
       realtime.heartbeat('away');
@@ -68,14 +70,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => Center(
           child: FilledButton(
-            onPressed: () => ref.invalidate(conversationsProvider),
+            onPressed: () => ref.read(conversationsProvider.notifier).refresh(),
             child: const Text('Retry'),
           ),
         ),
         data: (items) => RefreshIndicator(
           onRefresh: () async {
-            ref.invalidate(conversationsProvider);
-            await ref.read(conversationsProvider.future);
+            await ref.read(conversationsProvider.notifier).refresh();
           },
           child: ListView.builder(
             padding: const EdgeInsets.only(bottom: 110),

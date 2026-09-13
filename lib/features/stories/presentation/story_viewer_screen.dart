@@ -4,7 +4,10 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/network/api_error.dart';
+import '../../../routes/app_routes.dart';
 import '../../chat/data/chat_repository.dart';
 import '../data/stories_repository.dart';
 import '../domain/story_item.dart';
@@ -161,6 +164,29 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
                         ),
                       ),
                     ),
+                    PopupMenuButton<String>(
+                      iconColor: Colors.white,
+                      onOpened: _pause,
+                      onCanceled: _resume,
+                      onSelected: (value) => _storyAction(story, value),
+                      itemBuilder: (_) => [
+                        if (story.activityId != null)
+                          const PopupMenuItem(
+                            value: 'activity',
+                            child: Text('View activity'),
+                          ),
+                        if (story.isMine)
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Text('Delete story'),
+                          )
+                        else
+                          const PopupMenuItem(
+                            value: 'report',
+                            child: Text('Report story'),
+                          ),
+                      ],
+                    ),
                     IconButton(
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.close, color: Colors.white),
@@ -224,6 +250,16 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.white),
               ),
+            ),
+          ),
+        if (story.activityTitle != null)
+          Positioned(
+            left: 20,
+            top: 88,
+            child: ActionChip(
+              avatar: const Icon(Icons.sports, size: 17),
+              label: Text(story.activityTitle!),
+              onPressed: () => _openActivity(story.activityId!),
             ),
           ),
       ],
@@ -306,6 +342,70 @@ class _StoryViewerScreenState extends ConsumerState<StoryViewerScreen>
         _resume();
       }
     }
+  }
+
+  Future<void> _storyAction(StoryItem story, String action) async {
+    if (action == 'activity') {
+      _openActivity(story.activityId!);
+      return;
+    }
+    if (action == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Delete story?'),
+          content: const Text('This cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) {
+        _resume();
+        return;
+      }
+    }
+    try {
+      final repository = ref.read(storiesRepositoryProvider);
+      if (action == 'delete') {
+        await repository.delete(story.id);
+        ref.invalidate(storiesProvider);
+        if (mounted) Navigator.pop(context);
+      } else {
+        await repository.report(story.id);
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Story reported.')));
+          _resume();
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              apiErrorMessage(error, fallback: 'Story action failed.'),
+            ),
+          ),
+        );
+        _resume();
+      }
+    }
+  }
+
+  void _openActivity(String activityId) {
+    _pause();
+    context
+        .push(AppRoutes.activityDetail, extra: activityId)
+        .then((_) => _resume());
   }
 
   String _uuid() {

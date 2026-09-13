@@ -178,3 +178,47 @@ class ActivityParticipantItem {
     );
   }
 }
+
+class ActivityRatingTarget {
+  const ActivityRatingTarget({
+    required this.id,
+    required this.displayName,
+    required this.rated,
+  });
+
+  final String id;
+  final String displayName;
+  final bool rated;
+
+  factory ActivityRatingTarget.fromJson(Map<String, dynamic> json) =>
+      ActivityRatingTarget(
+        id: json['id'] as String,
+        displayName: json['display_name'] as String,
+        rated: json['rated'] as bool? ?? false,
+      );
+}
+
+class UserReputationItem {
+  const UserReputationItem({
+    required this.ratingsCount,
+    required this.sportsmanship,
+    required this.skill,
+    required this.reliability,
+    required this.attendanceRate,
+  });
+
+  final int ratingsCount;
+  final double sportsmanship;
+  final double skill;
+  final double reliability;
+  final double attendanceRate;
+
+  factory UserReputationItem.fromJson(Map<String, dynamic> json) =>
+      UserReputationItem(
+        ratingsCount: json['ratings_count'] as int? ?? 0,
+        sportsmanship: (json['sportsmanship_average'] as num?)?.toDouble() ?? 0,
+        skill: (json['skill_average'] as num?)?.toDouble() ?? 0,
+        reliability: (json['reliability_average'] as num?)?.toDouble() ?? 0,
+        attendanceRate: (json['attendance_rate'] as num?)?.toDouble() ?? 0,
+      );
+}

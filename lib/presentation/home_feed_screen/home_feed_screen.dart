@@ -26,7 +26,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   Future<void> _onRefresh() async {
     await Future.wait([
       ref.read(activityTaxonomyControllerProvider.notifier).refresh(),
-      ref.refresh(activityFeedProvider.future),
+      ref.read(activityFeedProvider.notifier).refresh(),
     ]);
   }
 

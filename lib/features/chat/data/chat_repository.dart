@@ -1,20 +1,49 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/network/api_client.dart';
 import '../../../core/application/provider_cache.dart';
 import '../domain/chat_models.dart';
+import 'chat_outbox.dart';
 
 class ChatRepository {
   final Dio _dio;
-  ChatRepository(this._dio);
+  final AuthTokenStore _tokens;
+  ChatRepository(this._dio, this._tokens);
 
   Future<List<ConversationItem>> conversations() async {
     final response = await _dio.get<Map<String, dynamic>>('/conversations');
-    return (response.data!['data'] as List)
+    final raw = response.data!['data'] as List;
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setString(await _conversationCacheKey(), jsonEncode(raw));
+    return raw
         .map((item) => ConversationItem.fromJson(item as Map<String, dynamic>))
         .toList();
+  }
+
+  Future<List<ConversationItem>?> cachedConversations() async {
+    final preferences = await SharedPreferences.getInstance();
+    final encoded = preferences.getString(await _conversationCacheKey());
+    if (encoded == null) return null;
+    try {
+      return (jsonDecode(encoded) as List)
+          .map(
+            (item) => ConversationItem.fromJson(item as Map<String, dynamic>),
+          )
+          .toList();
+    } catch (_) {
+      await preferences.remove(await _conversationCacheKey());
+      return null;
+    }
+  }
+
+  Future<String> _conversationCacheKey() async {
+    final token = await _tokens.read();
+    return 'chat.conversations.${token?.hashCode ?? 0}';
   }
 
   Future<ConversationItem> direct(String userId) async {
@@ -119,7 +148,7 @@ class ChatRepository {
     );
   }
 
-  Future<void> sendMedia(
+  Future<ChatMessageItem> sendMedia(
     String conversationId,
     PlatformFile file, {
     String? body,
@@ -129,7 +158,7 @@ class ChatRepository {
     final upload = file.bytes != null
         ? MultipartFile.fromBytes(file.bytes!, filename: file.name)
         : await MultipartFile.fromFile(file.path!, filename: file.name);
-    await _dio.post(
+    final response = await _dio.post<Map<String, dynamic>>(
       '/conversations/$conversationId/messages',
       data: FormData.fromMap({
         'file': upload,
@@ -137,6 +166,9 @@ class ChatRepository {
         if (body?.trim().isNotEmpty == true) 'body': body!.trim(),
         if (replyToId != null) 'reply_to_id': replyToId,
       }),
+    );
+    return ChatMessageItem.fromJson(
+      response.data!['data'] as Map<String, dynamic>,
     );
   }
 
@@ -168,14 +200,44 @@ class ChatRepository {
 }
 
 final chatRepositoryProvider = Provider<ChatRepository>(
-  (ref) => ChatRepository(ref.watch(dioProvider)),
+  (ref) =>
+      ChatRepository(ref.watch(dioProvider), ref.watch(authTokenStoreProvider)),
 );
 
+final chatOutboxProvider = Provider<ChatOutbox>(
+  (ref) => ChatOutbox(
+    ref.watch(secureStorageProvider),
+    ref.watch(authTokenStoreProvider),
+  ),
+);
+
+class ConversationsNotifier extends AsyncNotifier<List<ConversationItem>> {
+  @override
+  Future<List<ConversationItem>> build() async {
+    final repository = ref.watch(chatRepositoryProvider);
+    final cached = await repository.cachedConversations();
+    if (cached != null) {
+      Future<void>.microtask(() => refresh(silent: true));
+      return cached;
+    }
+    return repository.conversations();
+  }
+
+  Future<void> refresh({bool silent = false}) async {
+    if (!silent) state = const AsyncLoading();
+    try {
+      final fresh = await ref.read(chatRepositoryProvider).conversations();
+      state = AsyncData(fresh);
+    } catch (error, stackTrace) {
+      if (!silent || !state.hasValue) state = AsyncError(error, stackTrace);
+    }
+  }
+}
+
 final conversationsProvider =
-    FutureProvider.autoDispose<List<ConversationItem>>((ref) {
-      cacheFor(ref, const Duration(minutes: 2));
-      return ref.watch(chatRepositoryProvider).conversations();
-    });
+    AsyncNotifierProvider<ConversationsNotifier, List<ConversationItem>>(
+      ConversationsNotifier.new,
+    );
 
 class ChatMessagePage {
   const ChatMessagePage(this.items, this.nextCursor);

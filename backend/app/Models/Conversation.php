@@ -41,11 +41,8 @@ class Conversation extends Model
 
     public function latestMessage(): HasOne
     {
-        // latestOfMany() aggregates the UUID primary key with MAX(), which is
-        // unsupported by PostgreSQL. Ordering is also correct for eager loads
-        // because a has-one relation keeps the first matching child per parent.
-        return $this->hasOne(Message::class)
-            ->orderByDesc('created_at')
-            ->orderByDesc('id');
+        // Aggregate the timestamp only. PostgreSQL cannot MAX() a UUID, while
+        // the previous ordered has-one eager load could hydrate every message.
+        return $this->hasOne(Message::class)->ofMany('created_at', 'max');
     }
 }

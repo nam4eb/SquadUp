@@ -26,6 +26,8 @@ const _broadcastAuthUrl = String.fromEnvironment(
 
 typedef RealtimeEventHandler = void Function(String event, dynamic data);
 
+enum RealtimeConnectionStatus { connecting, connected, degraded }
+
 class RealtimeService {
   RealtimeService(this._tokens, this._dio);
 
@@ -35,6 +37,19 @@ class RealtimeService {
   Future<void>? _connecting;
   Timer? _presenceTimer;
   final Map<String, PrivateChannel> _channels = {};
+  final Map<String, RealtimeEventHandler> _handlers = {};
+  final StreamController<RealtimeConnectionStatus> _statusController =
+      StreamController<RealtimeConnectionStatus>.broadcast();
+  RealtimeConnectionStatus _status = RealtimeConnectionStatus.degraded;
+
+  RealtimeConnectionStatus get status => _status;
+  Stream<RealtimeConnectionStatus> get statuses => _statusController.stream;
+
+  void _setStatus(RealtimeConnectionStatus value) {
+    if (_status == value) return;
+    _status = value;
+    _statusController.add(value);
+  }
 
   Future<void> connect() {
     if (_client != null) return Future.value();
@@ -44,6 +59,7 @@ class RealtimeService {
   Future<void> _connect() async {
     final token = await _tokens.read();
     if (token == null || token.isEmpty) return;
+    _setStatus(RealtimeConnectionStatus.connecting);
 
     final client = ReverbClient.instance(
       host: _reverbHost,
@@ -59,8 +75,10 @@ class RealtimeService {
     try {
       await client.connect();
       _client = client;
+      _setStatus(RealtimeConnectionStatus.connected);
     } catch (_) {
       _client = null;
+      _setStatus(RealtimeConnectionStatus.degraded);
       rethrow;
     }
   }
@@ -69,6 +87,7 @@ class RealtimeService {
     String conversationId,
     RealtimeEventHandler onEvent,
   ) async {
+    _handlers[conversationId] = onEvent;
     try {
       await connect();
       final client = _client;
@@ -90,13 +109,34 @@ class RealtimeService {
       _channels[conversationId] = channel;
     } catch (_) {
       // REST remains the fallback if the realtime server is unavailable.
+      _setStatus(RealtimeConnectionStatus.degraded);
     }
   }
 
   void unsubscribeConversation(String conversationId) {
+    _handlers.remove(conversationId);
     final channel = _channels.remove(conversationId);
     if (channel != null) {
       _client?.unsubscribeFromChannel(channel.name);
+    }
+  }
+
+  Future<void> recover() async {
+    final client = _client;
+    if (client == null) {
+      await connect();
+    } else if (client.connectionState != ConnectionState.connected) {
+      try {
+        _setStatus(RealtimeConnectionStatus.connecting);
+        await client.connect();
+        _setStatus(RealtimeConnectionStatus.connected);
+      } catch (_) {
+        _setStatus(RealtimeConnectionStatus.degraded);
+        return;
+      }
+    }
+    for (final entry in _handlers.entries.toList()) {
+      await subscribeConversation(entry.key, entry.value);
     }
   }
 
@@ -130,4 +170,12 @@ final realtimeServiceProvider = Provider<RealtimeService>((ref) {
     ref.watch(authTokenStoreProvider),
     ref.watch(dioProvider),
   );
+});
+
+final realtimeConnectionProvider = StreamProvider<RealtimeConnectionStatus>((
+  ref,
+) async* {
+  final service = ref.watch(realtimeServiceProvider);
+  yield service.status;
+  yield* service.statuses;
 });

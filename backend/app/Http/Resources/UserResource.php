@@ -28,6 +28,7 @@ class UserResource extends JsonResource
             'date_of_birth' => $isOwner ? $this->date_of_birth?->toDateString() : null,
             'location' => $this->location,
             'presence_status' => $this->presence_status,
+            'sports' => UserSportProfileResource::collection($this->whenLoaded('sportProfiles')),
             'email' => $isOwner ? $this->email : null,
             'email_verified_at' => $isOwner ? $this->email_verified_at?->toISOString() : null,
             'account_status' => $isOwner ? $this->account_status->value : null,

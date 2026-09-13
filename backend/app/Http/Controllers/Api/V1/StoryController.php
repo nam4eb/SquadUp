@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\StoryResource;
 use App\Models\Friendship;
+use App\Models\Block;
+use App\Models\Activity;
 use App\Models\Story;
 use App\Support\UserPair;
 use Illuminate\Http\JsonResponse;
@@ -20,6 +22,12 @@ class StoryController extends Controller
         $user = $request->user();
         return StoryResource::collection(
             Story::query()->where('expires_at', '>', now())
+                ->whereNotExists(fn ($blocked) => $blocked->selectRaw('1')->from('blocks')
+                    ->where(fn ($pair) => $pair
+                        ->where(fn ($forward) => $forward->where('blocks.blocker_id', $user->id)
+                            ->whereColumn('blocks.blocked_id', 'stories.user_id'))
+                        ->orWhere(fn ($reverse) => $reverse->where('blocks.blocked_id', $user->id)
+                            ->whereColumn('blocks.blocker_id', 'stories.user_id'))))
                 ->where(fn ($query) => $query
                     ->where('user_id', $user->id)
                     ->orWhere('visibility', 'public')
@@ -35,7 +43,7 @@ class StoryController extends Controller
                                 ->orWhere(fn ($reverse) => $reverse
                                     ->where('friendships.user_high_id', $user->id)
                                     ->whereColumn('friendships.user_low_id', 'stories.user_id'))))))
-                ->with('user')
+                ->with(['user', 'activity'])
                 ->withExists(['views as viewed_by_me' => fn ($views) => $views->where('user_id', $user->id)])
                 ->withCount('views')->oldest()->get()
         );
@@ -47,12 +55,21 @@ class StoryController extends Controller
             'media' => ['required', 'file', 'mimetypes:image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm', 'max:51200'],
             'caption' => ['nullable', 'string', 'max:500'],
             'visibility' => ['sometimes', Rule::in(['friends', 'public'])],
+            'activity_id' => ['nullable', 'uuid', 'exists:activities,id'],
         ]);
+        if ($activityId = $validated['activity_id'] ?? null) {
+            $activity = Activity::findOrFail($activityId);
+            $eligible = $activity->status->value === 'completed'
+                && $activity->participants()->where('user_id', $request->user()->id)
+                    ->where(fn ($query) => $query->where('role', 'host')->orWhere('status', 'attended'))->exists();
+            abort_unless($eligible, 403);
+        }
         $disk = config('media.disk');
         $media = $request->file('media');
         $mediaType = str_starts_with((string) $media->getMimeType(), 'video/') ? 'video' : 'image';
         $story = Story::create([
             'user_id' => $request->user()->id,
+            'activity_id' => $validated['activity_id'] ?? null,
             'media_disk' => $disk,
             'media_path' => $media->store("stories/{$request->user()->id}", $disk),
             'media_type' => $mediaType,
@@ -61,7 +78,7 @@ class StoryController extends Controller
             'expires_at' => now()->addDay(),
         ]);
 
-        return new StoryResource($story->load('user'));
+        return new StoryResource($story->load(['user', 'activity']));
     }
 
     public function view(Story $story, Request $request): JsonResponse
@@ -105,6 +122,9 @@ class StoryController extends Controller
 
     private function canView(Story $story, Request $request): bool
     {
+        if (Block::query()->between($story->user_id, $request->user()->id)->exists()) {
+            return false;
+        }
         if ($story->user_id === $request->user()->id || $story->visibility === 'public') {
             return true;
         }

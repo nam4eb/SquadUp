@@ -5,6 +5,12 @@ namespace Tests\Feature\Api\V1;
 use App\Models\Friendship;
 use App\Models\Story;
 use App\Models\User;
+use App\Models\Activity;
+use App\Models\ActivityCategory;
+use App\Models\ActivityParticipant;
+use App\Models\ActivityTopic;
+use App\Models\Block;
+use App\Models\ReportReason;
 use App\Support\UserPair;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -64,6 +70,54 @@ class StoryTest extends TestCase
         Story::whereKey($storyId)->update(['expires_at' => now()->subSecond()]);
 
         $this->getJson('/api/v1/stories')->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_attendee_can_link_completed_activity_and_block_hides_story(): void
+    {
+        Storage::fake('public');
+        $host = User::factory()->create();
+        $attendee = User::factory()->create();
+        $category = ActivityCategory::create(['name' => 'Sports', 'slug' => 'sports']);
+        $topic = ActivityTopic::create(['category_id' => $category->id, 'name' => 'Game', 'slug' => 'game']);
+        $activity = Activity::create([
+            'host_id' => $host->id, 'category_id' => $category->id, 'topic_id' => $topic->id,
+            'title' => 'Final match', 'starts_at' => now()->subHours(2), 'timezone' => 'UTC',
+            'location_name' => 'Court', 'max_participants' => 4, 'status' => 'completed', 'visibility' => 'public',
+        ]);
+        ActivityParticipant::create([
+            'activity_id' => $activity->id, 'user_id' => $attendee->id,
+            'role' => 'member', 'status' => 'attended', 'joined_at' => now()->subHours(2),
+        ]);
+        Sanctum::actingAs($attendee);
+        $storyId = $this->post('/api/v1/stories', [
+            'media' => $this->fakePng(), 'visibility' => 'public', 'activity_id' => $activity->id,
+        ], ['Accept' => 'application/json'])->assertCreated()
+            ->assertJsonPath('data.activity.id', $activity->id)->json('data.id');
+
+        Sanctum::actingAs($host);
+        $this->getJson('/api/v1/stories')->assertJsonPath('data.0.id', $storyId);
+        Block::create(['blocker_id' => $host->id, 'blocked_id' => $attendee->id]);
+        $this->getJson('/api/v1/stories')->assertOk()->assertJsonCount(0, 'data');
+        $this->postJson("/api/v1/stories/{$storyId}/view")->assertNotFound();
+    }
+
+    public function test_visible_story_can_be_reported(): void
+    {
+        Storage::fake('public');
+        $owner = User::factory()->create();
+        $viewer = User::factory()->create();
+        Sanctum::actingAs($owner);
+        $storyId = $this->post('/api/v1/stories', [
+            'media' => $this->fakePng(), 'visibility' => 'public',
+        ], ['Accept' => 'application/json'])->json('data.id');
+        ReportReason::query()->updateOrCreate(
+            ['code' => 'spam'],
+            ['label' => 'Spam', 'is_active' => true],
+        );
+        Sanctum::actingAs($viewer);
+        $this->postJson('/api/v1/reports', [
+            'target_type' => 'story', 'target_id' => $storyId, 'reason' => 'spam',
+        ])->assertCreated();
     }
 
     private function fakePng(): UploadedFile
