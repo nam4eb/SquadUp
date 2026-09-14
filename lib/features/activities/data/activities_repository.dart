@@ -39,6 +39,7 @@ class ActivitiesRepository {
     double? radiusKm,
     int page = 1,
   }) async {
+    final requestToken = await _tokens.read();
     final response = await _dio.get<Map<String, dynamic>>(
       '/explore',
       queryParameters: {
@@ -47,13 +48,16 @@ class ActivitiesRepository {
         if (sportId != null) 'sport_id': sportId,
         if (skill != null) 'skill': skill,
         if (matchFormat != null) 'match_format': matchFormat,
-        if (openSlots) 'open_slots': true,
+        if (openSlots) 'open_slots': 1,
         if (latitude != null) 'near_lat': latitude,
         if (longitude != null) 'near_lng': longitude,
         if (radiusKm != null) 'radius_km': radiusKm,
         'page': page,
       },
     );
+    if (requestToken != await _tokens.read()) {
+      throw StateError('Session changed while loading activities.');
+    }
     final raw = response.data!['data'] as List;
     if (query?.trim().isNotEmpty != true &&
         categoryId == null &&
@@ -64,7 +68,10 @@ class ActivitiesRepository {
         latitude == null &&
         page == 1) {
       final preferences = await SharedPreferences.getInstance();
-      await preferences.setString(await _feedCacheKey(), jsonEncode(raw));
+      await preferences.setString(
+        'activities.feed.${requestToken?.hashCode ?? 0}',
+        jsonEncode(raw),
+      );
     }
     return raw
         .map((item) => ActivityItem.fromJson(item as Map<String, dynamic>))
@@ -118,7 +125,7 @@ class ActivitiesRepository {
         if (sportId != null) 'sport_id': sportId,
         if (skill != null) 'skill': skill,
         if (matchFormat != null) 'match_format': matchFormat,
-        if (openSlots) 'open_slots': true,
+        if (openSlots) 'open_slots': 1,
       },
     );
     final meta = response.data!['meta'] as Map<String, dynamic>;
@@ -405,8 +412,10 @@ class ActivityFeedNotifier extends AsyncNotifier<List<ActivityItem>> {
   Future<void> refresh({bool silent = false}) async {
     if (!silent) state = const AsyncLoading();
     try {
-      state = AsyncData(await ref.read(activitiesRepositoryProvider).list());
+      final items = await ref.read(activitiesRepositoryProvider).list();
+      if (ref.mounted) state = AsyncData(items);
     } catch (error, stackTrace) {
+      if (!ref.mounted) return;
       if (!silent || !state.hasValue) state = AsyncError(error, stackTrace);
     }
   }

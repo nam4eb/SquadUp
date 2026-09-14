@@ -41,8 +41,14 @@ class Conversation extends Model
 
     public function latestMessage(): HasOne
     {
-        // Aggregate the timestamp only. PostgreSQL cannot MAX() a UUID, while
-        // the previous ordered has-one eager load could hydrate every message.
-        return $this->hasOne(Message::class)->ofMany('created_at', 'max');
+        // ofMany also aggregates the UUID primary key as a tie-breaker, which
+        // PostgreSQL does not support. Select one non-deleted ID per chat.
+        return $this->hasOne(Message::class)->where('messages.id', '=', function ($query): void {
+            $query->select('latest.id')->from('messages as latest')
+                ->whereColumn('latest.conversation_id', 'messages.conversation_id')
+                ->whereNull('latest.deleted_at')
+                ->orderByDesc('latest.created_at')->orderByDesc('latest.id')
+                ->limit(1);
+        });
     }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../../routes/app_routes.dart';
 
 import '../application/activity_taxonomy_controller.dart';
 
@@ -42,7 +44,12 @@ class ActivityCategoryStrip extends ConsumerWidget {
               ),
               label: Text(category.name),
               tooltip: '${category.topics.length} topics',
-              onPressed: () {},
+              onPressed: () => context.push(
+                Uri(
+                  path: AppRoutes.explore,
+                  queryParameters: {'category_id': category.id},
+                ).toString(),
+              ),
             );
           },
         ),

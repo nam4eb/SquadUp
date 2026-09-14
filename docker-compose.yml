@@ -200,6 +200,12 @@ services:
       redis:
         condition: service_healthy
 
+  scheduler:
+    extends:
+      service: queue
+    command: php artisan schedule:work
+    restart: unless-stopped
+
   postgres:
     image: postgres:16-alpine
     environment:

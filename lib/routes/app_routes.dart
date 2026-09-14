@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/network/api_client.dart';
+import '../features/authentication/data/auth_repository.dart';
+import '../features/activities/data/activities_repository.dart';
+import '../features/chat/data/chat_repository.dart';
 import '../presentation/sign_up_login_screen/sign_up_login_screen.dart';
 import '../presentation/home_feed_screen/home_feed_screen.dart';
 import '../presentation/activity_detail_screen/activity_detail_screen.dart';
@@ -50,193 +55,233 @@ class AppRoutes {
   static const String onboarding = '/onboarding';
 }
 
-final GoRouter appRouter = GoRouter(
-  initialLocation: AppRoutes.initial,
-  routes: [
-    GoRoute(
-      path: AppRoutes.initial,
-      pageBuilder: (context, state) => CustomTransitionPage(
-        key: state.pageKey,
-        child: const SignUpLoginScreen(),
-        transitionDuration: const Duration(milliseconds: 280),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: Curves.easeOutCubic,
-            ),
-            child: child,
-          );
-        },
+final appRouterProvider = Provider<GoRouter>((ref) {
+  final tokens = ref.watch(authTokenStoreProvider);
+  void resetSessionData() {
+    ref.invalidate(currentUserProvider);
+    ref.invalidate(activityFeedProvider);
+    ref.invalidate(activityDetailProvider);
+    ref.invalidate(activityParticipantsProvider);
+    ref.invalidate(conversationsProvider);
+    ref.invalidate(messagesProvider);
+  }
+
+  tokens.addListener(resetSessionData);
+  final router = GoRouter(
+    refreshListenable: tokens,
+    redirect: (context, state) async {
+      final token = await tokens.read();
+      final isLogin =
+          state.matchedLocation == AppRoutes.initial ||
+          state.matchedLocation == AppRoutes.signUpLogin;
+      if (token == null) return isLogin ? null : AppRoutes.signUpLogin;
+      if (isLogin) {
+        try {
+          final user = await ref.read(currentUserProvider.future);
+          return user.onboardingCompleted
+              ? AppRoutes.homeFeed
+              : AppRoutes.onboarding;
+        } catch (_) {
+          // Keep login available when a stored session cannot be restored.
+          return null;
+        }
+      }
+      return null;
+    },
+    initialLocation: AppRoutes.initial,
+    routes: [
+      GoRoute(
+        path: AppRoutes.initial,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const SignUpLoginScreen(),
+          transitionDuration: const Duration(milliseconds: 280),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ),
+              child: child,
+            );
+          },
+        ),
       ),
-    ),
-    GoRoute(
-      path: AppRoutes.signUpLogin,
-      pageBuilder: (context, state) => CustomTransitionPage(
-        key: state.pageKey,
-        child: const SignUpLoginScreen(),
-        transitionDuration: const Duration(milliseconds: 280),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return SlideTransition(
-            position:
-                Tween<Offset>(
-                  begin: const Offset(0.04, 0),
-                  end: Offset.zero,
-                ).animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
+      GoRoute(
+        path: AppRoutes.signUpLogin,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const SignUpLoginScreen(),
+          transitionDuration: const Duration(milliseconds: 280),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
                   ),
-                ),
-            child: FadeTransition(opacity: animation, child: child),
+              child: FadeTransition(opacity: animation, child: child),
+            );
+          },
+        ),
+      ),
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return AppScaffold(navigationShell: navigationShell);
+        },
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.homeFeed,
+                pageBuilder: (context, state) =>
+                    const NoTransitionPage(child: HomeFeedScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.friends,
+                pageBuilder: (context, state) =>
+                    const NoTransitionPage(child: FriendsScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.chat,
+                pageBuilder: (context, state) =>
+                    const NoTransitionPage(child: ChatScreen()),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: AppRoutes.clans,
+                pageBuilder: (context, state) =>
+                    const NoTransitionPage(child: ClansScreen()),
+              ),
+            ],
+          ),
+        ],
+      ),
+      GoRoute(
+        path: AppRoutes.onboarding,
+        builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.redeemInvitation,
+        builder: (context, state) => const RedeemInvitationScreen(),
+      ),
+      GoRoute(
+        path: '/invite',
+        builder: (_, state) => RedeemInvitationScreen(
+          initialSecret: state.uri.queryParameters['secret'],
+          initialType: state.uri.queryParameters['type'] ?? 'link',
+        ),
+      ),
+      GoRoute(path: AppRoutes.qrJoin, builder: (_, _) => const QrJoinScreen()),
+      GoRoute(
+        path: AppRoutes.lobbyInvite,
+        builder: (_, state) {
+          final activity = state.extra! as Map<String, String>;
+          return LobbyInviteScreen(
+            activityId: activity['id']!,
+            activityTitle: activity['title']!,
           );
         },
       ),
-    ),
-    StatefulShellRoute.indexedStack(
-      builder: (context, state, navigationShell) {
-        return AppScaffold(navigationShell: navigationShell);
-      },
-      branches: [
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: AppRoutes.homeFeed,
-              pageBuilder: (context, state) =>
-                  const NoTransitionPage(child: HomeFeedScreen()),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: AppRoutes.friends,
-              pageBuilder: (context, state) =>
-                  const NoTransitionPage(child: FriendsScreen()),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: AppRoutes.chat,
-              pageBuilder: (context, state) =>
-                  const NoTransitionPage(child: ChatScreen()),
-            ),
-          ],
-        ),
-        StatefulShellBranch(
-          routes: [
-            GoRoute(
-              path: AppRoutes.clans,
-              pageBuilder: (context, state) =>
-                  const NoTransitionPage(child: ClansScreen()),
-            ),
-          ],
-        ),
-      ],
-    ),
-    GoRoute(
-      path: AppRoutes.onboarding,
-      builder: (context, state) => const OnboardingScreen(),
-    ),
-    GoRoute(
-      path: AppRoutes.redeemInvitation,
-      builder: (context, state) => const RedeemInvitationScreen(),
-    ),
-    GoRoute(
-      path: '/invite',
-      builder: (_, state) => RedeemInvitationScreen(
-        initialSecret: state.uri.queryParameters['secret'],
-        initialType: state.uri.queryParameters['type'] ?? 'link',
+      GoRoute(
+        path: AppRoutes.createActivity,
+        builder: (context, state) {
+          final clan = state.extra as Map<String, String>?;
+          return CreateActivityScreen(
+            clanId: clan?['id'],
+            clanName: clan?['name'],
+          );
+        },
       ),
-    ),
-    GoRoute(path: AppRoutes.qrJoin, builder: (_, _) => const QrJoinScreen()),
-    GoRoute(
-      path: AppRoutes.lobbyInvite,
-      builder: (_, state) {
-        final activity = state.extra! as Map<String, String>;
-        return LobbyInviteScreen(
-          activityId: activity['id']!,
-          activityTitle: activity['title']!,
-        );
-      },
-    ),
-    GoRoute(
-      path: AppRoutes.createActivity,
-      builder: (context, state) {
-        final clan = state.extra as Map<String, String>?;
-        return CreateActivityScreen(
-          clanId: clan?['id'],
-          clanName: clan?['name'],
-        );
-      },
-    ),
-    GoRoute(
-      path: AppRoutes.notifications,
-      builder: (context, state) => const NotificationsScreen(),
-    ),
-    GoRoute(
-      path: AppRoutes.notificationPreferences,
-      builder: (context, state) => const NotificationPreferencesScreen(),
-    ),
-    GoRoute(
-      path: AppRoutes.accountSettings,
-      builder: (context, state) => const AccountSettingsScreen(),
-    ),
-    GoRoute(
-      path: AppRoutes.profile,
-      builder: (context, state) => const ProfileScreen(),
-    ),
-    GoRoute(
-      path: AppRoutes.explore,
-      builder: (context, state) => const ExploreScreen(),
-    ),
-    GoRoute(
-      path: AppRoutes.clanDetail,
-      builder: (context, state) =>
-          ClanDetailScreen(clanId: state.extra as String? ?? ''),
-    ),
-    GoRoute(
-      path: AppRoutes.clanChat,
-      builder: (context, state) {
-        final clan = state.extra! as Map<String, String>;
-        return ClanChatScreen(clanId: clan['id']!, clanName: clan['name']!);
-      },
-    ),
-    GoRoute(
-      path: AppRoutes.conversation,
-      builder: (context, state) =>
-          ConversationScreen(conversation: state.extra! as ConversationItem),
-    ),
-    GoRoute(
-      path: AppRoutes.groupConversationSettings,
-      builder: (context, state) => GroupConversationSettingsScreen(
-        conversationId: state.extra! as String,
+      GoRoute(
+        path: AppRoutes.notifications,
+        builder: (context, state) => const NotificationsScreen(),
       ),
-    ),
-    GoRoute(
-      path: AppRoutes.activityDetail,
-      pageBuilder: (context, state) => CustomTransitionPage(
-        key: state.pageKey,
-        child: ActivityDetailScreen(activityId: state.extra as String? ?? ''),
-        transitionDuration: const Duration(milliseconds: 280),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          return SlideTransition(
-            position:
-                Tween<Offset>(
-                  begin: const Offset(0.04, 0),
-                  end: Offset.zero,
-                ).animate(
-                  CurvedAnimation(
-                    parent: animation,
-                    curve: Curves.easeOutCubic,
+      GoRoute(
+        path: AppRoutes.notificationPreferences,
+        builder: (context, state) => const NotificationPreferencesScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.accountSettings,
+        builder: (context, state) => const AccountSettingsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.profile,
+        builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.explore,
+        builder: (context, state) => ExploreScreen(
+          initialCategoryId: state.uri.queryParameters['category_id'],
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.clanDetail,
+        builder: (context, state) =>
+            ClanDetailScreen(clanId: state.extra as String? ?? ''),
+      ),
+      GoRoute(
+        path: AppRoutes.clanChat,
+        builder: (context, state) {
+          final clan = state.extra! as Map<String, String>;
+          return ClanChatScreen(clanId: clan['id']!, clanName: clan['name']!);
+        },
+      ),
+      GoRoute(
+        path: AppRoutes.conversation,
+        builder: (context, state) =>
+            ConversationScreen(conversation: state.extra! as ConversationItem),
+      ),
+      GoRoute(
+        path: AppRoutes.groupConversationSettings,
+        builder: (context, state) => GroupConversationSettingsScreen(
+          conversationId: state.extra! as String,
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.activityDetail,
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: ActivityDetailScreen(activityId: state.extra as String? ?? ''),
+          transitionDuration: const Duration(milliseconds: 280),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0.04, 0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
                   ),
-                ),
-            child: FadeTransition(opacity: animation, child: child),
-          );
-        },
+              child: FadeTransition(opacity: animation, child: child),
+            );
+          },
+        ),
       ),
-    ),
-  ],
-);
+    ],
+  );
+  ref.onDispose(() {
+    tokens.removeListener(resetSessionData);
+    router.dispose();
+  });
+  return router;
+});

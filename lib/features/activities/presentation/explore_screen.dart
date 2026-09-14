@@ -14,7 +14,8 @@ import 'activity_thumbnail.dart';
 import 'explore_map.dart';
 
 class ExploreScreen extends ConsumerStatefulWidget {
-  const ExploreScreen({super.key});
+  const ExploreScreen({this.initialCategoryId, super.key});
+  final String? initialCategoryId;
 
   @override
   ConsumerState<ExploreScreen> createState() => _ExploreScreenState();
@@ -38,11 +39,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   bool _hasMore = false;
   List<ActivityItem> _results = const [];
   bool _loading = false;
+  int _loadGeneration = 0;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _categoryId = widget.initialCategoryId;
     _restoreFilters();
   }
 
@@ -345,7 +348,9 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   }
 
   Future<void> _load({bool loadMore = false}) async {
+    final generation = ++_loadGeneration;
     await _saveFilters();
+    if (!mounted || generation != _loadGeneration) return;
     final latitude =
         _position?.latitude ?? double.tryParse(_latitude.text.trim());
     final longitude =
@@ -375,7 +380,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               radiusKm: _radius,
               page: nextPage,
             );
-        if (mounted) {
+        if (mounted && generation == _loadGeneration) {
           setState(() {
             _results = loadMore
                 ? _dedupe([..._results, ...result.items])
@@ -395,7 +400,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               matchFormat: _matchFormat,
               openSlots: _openSlots,
             );
-        if (mounted) {
+        if (mounted && generation == _loadGeneration) {
           setState(() {
             _results = results;
             _hasMore = false;
@@ -403,9 +408,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
         }
       }
     } catch (_) {
-      if (mounted) setState(() => _error = 'Unable to search activities.');
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _error = 'Unable to search activities.');
+      }
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _loading = false);
+      }
     }
   }
 
@@ -421,7 +430,9 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
       _openSlots = preferences.getBool('explore.open_slots') ?? true;
       _showMap = preferences.getBool('explore.show_map') ?? false;
     });
-    await _locateAndLoad();
+    // Listing activities must not wait for a GPS permission prompt. The
+    // explicit location button enables nearby search when the user wants it.
+    await _load();
   }
 
   Future<void> _saveFilters() async {

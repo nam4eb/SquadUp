@@ -1,0 +1,96 @@
+{
+  "measured_at": "2026-09-14T03:37:00.1115690Z",
+  "workload": "Sequential authenticated local requests, one warm-up per endpoint; not a load/capacity test.",
+  "measurements": [
+    {
+      "port": 8000,
+      "endpoint": "auth/me",
+      "samples": 5,
+      "median_ms": 1955.88,
+      "min_ms": 1941.07,
+      "max_ms": 2265.93,
+      "durations_ms": [
+        1941.07,
+        1946.34,
+        2265.93,
+        1973.49,
+        1955.88
+      ]
+    },
+    {
+      "port": 8000,
+      "endpoint": "explore",
+      "samples": 5,
+      "median_ms": 2041.14,
+      "min_ms": 2013.05,
+      "max_ms": 2246.79,
+      "durations_ms": [
+        2013.05,
+        2246.79,
+        2075.75,
+        2041.14,
+        2035.66
+      ]
+    },
+    {
+      "port": 8000,
+      "endpoint": "conversations",
+      "samples": 5,
+      "median_ms": 2122.87,
+      "min_ms": 1984.56,
+      "max_ms": 2455.19,
+      "durations_ms": [
+        1984.56,
+        2216.62,
+        2122.87,
+        2455.19,
+        2044.88
+      ]
+    },
+    {
+      "port": 8001,
+      "endpoint": "auth/me",
+      "samples": 5,
+      "median_ms": 14.91,
+      "min_ms": 6.93,
+      "max_ms": 48.54,
+      "durations_ms": [
+        48.54,
+        48.38,
+        14.91,
+        6.93,
+        7.98
+      ]
+    },
+    {
+      "port": 8001,
+      "endpoint": "explore",
+      "samples": 5,
+      "median_ms": 47.13,
+      "min_ms": 20.39,
+      "max_ms": 59.61,
+      "durations_ms": [
+        47.13,
+        55.3,
+        59.61,
+        20.39,
+        21.98
+      ]
+    },
+    {
+      "port": 8001,
+      "endpoint": "conversations",
+      "samples": 5,
+      "median_ms": 24.39,
+      "min_ms": 18.61,
+      "max_ms": 28.76,
+      "durations_ms": [
+        28.76,
+        27.68,
+        24.39,
+        18.61,
+        19.58
+      ]
+    }
+  ]
+}

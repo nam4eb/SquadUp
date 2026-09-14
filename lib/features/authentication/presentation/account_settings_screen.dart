@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../routes/app_routes.dart';
+import '../../../core/network/api_client.dart';
 import '../data/auth_repository.dart';
 import '../domain/auth_user.dart';
 
@@ -202,6 +203,8 @@ class _AccountSettingsScreenState extends ConsumerState<AccountSettingsScreen> {
   Future<void> _revoke(DeviceSession session) async {
     await ref.read(authRepositoryProvider).revokeSession(session.id);
     if (session.isCurrent && mounted) {
+      await ref.read(authTokenStoreProvider).delete();
+      if (!mounted) return;
       context.go(AppRoutes.initial);
     } else {
       await _refresh();

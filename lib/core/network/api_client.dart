@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -17,7 +18,7 @@ final secureStorageProvider = Provider<FlutterSecureStorage>((ref) {
   );
 });
 
-class AuthTokenStore {
+class AuthTokenStore extends ChangeNotifier {
   AuthTokenStore(this._storage);
 
   final FlutterSecureStorage _storage;
@@ -28,10 +29,10 @@ class AuthTokenStore {
   Future<String?> read() {
     if (_loaded) return Future.value(_token);
     return _loading ??= _storage.read(key: authTokenKey).then((value) {
-      _token = value;
+      if (!_loaded) _token = value;
       _loaded = true;
       _loading = null;
-      return value;
+      return _token;
     });
   }
 
@@ -39,12 +40,22 @@ class AuthTokenStore {
     _token = token;
     _loaded = true;
     await _storage.write(key: authTokenKey, value: token);
+    notifyListeners();
   }
 
   Future<void> delete() async {
     _token = null;
     _loaded = true;
     await _storage.delete(key: authTokenKey);
+    notifyListeners();
+  }
+
+  Future<void> invalidateIfCurrent(String? authorization) async {
+    final token = await read();
+    // A delayed 401 from a previous session must not sign out a new login.
+    if (token != null && _token == token && authorization == 'Bearer $token') {
+      await delete();
+    }
   }
 }
 
@@ -101,7 +112,9 @@ final dioProvider = Provider<Dio>((ref) {
           );
         }
         if (error.response?.statusCode == 401) {
-          await tokenStore.delete();
+          await tokenStore.invalidateIfCurrent(
+            error.requestOptions.headers['Authorization'] as String?,
+          );
         }
         handler.next(error);
       },

@@ -112,6 +112,20 @@ services:
       redis:
         condition: service_healthy
 
+  scheduler:
+    <<: *app-service
+    command: php artisan schedule:work
+    environment:
+      <<: *app-environment
+      AUTORUN_ENABLED: "false"
+    healthcheck:
+      disable: true
+    depends_on:
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped

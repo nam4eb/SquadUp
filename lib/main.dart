@@ -70,15 +70,19 @@ class _SquadUpAppState extends ConsumerState<SquadUpApp> {
         final conversation = await ref
             .read(chatRepositoryProvider)
             .conversation(conversationId);
-        appRouter.push(AppRoutes.conversation, extra: conversation);
+        ref
+            .read(appRouterProvider)
+            .push(AppRoutes.conversation, extra: conversation);
       } catch (_) {
-        appRouter.go(AppRoutes.chat);
+        ref.read(appRouterProvider).go(AppRoutes.chat);
       }
       return;
     }
     final activityId = payload['activity_id']?.toString();
     if (activityId != null && activityId.isNotEmpty) {
-      appRouter.push(AppRoutes.activityDetail, extra: activityId);
+      ref
+          .read(appRouterProvider)
+          .push(AppRoutes.activityDetail, extra: activityId);
     }
   }
 
@@ -94,7 +98,7 @@ class _SquadUpAppState extends ConsumerState<SquadUpApp> {
           // Respect the user's system text-size preference for accessibility.
           builder: (context, child) => child ?? const SizedBox.shrink(),
           debugShowCheckedModeBanner: false,
-          routerConfig: appRouter,
+          routerConfig: ref.watch(appRouterProvider),
         );
       },
     );

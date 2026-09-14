@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../routes/app_routes.dart';
 import '../../theme/app_theme.dart';
+import '../../features/authentication/data/auth_repository.dart';
 import '../../features/activities/application/activity_taxonomy_controller.dart';
 import '../../features/activities/data/activities_repository.dart';
 import '../../features/activities/presentation/api_activity_feed.dart';
@@ -81,7 +82,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: SectionHeaderWidget(
                         title: 'Upcoming Activities',
-                        onViewAll: () {},
+                        onViewAll: () => context.push(AppRoutes.explore),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -100,6 +101,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
   }
 
   Widget _buildGreeting() {
+    final user = ref.watch(currentUserProvider).asData?.value;
     final hour = DateTime.now().hour;
     final greeting = hour < 12
         ? 'Good Morning'
@@ -127,9 +129,9 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
               ),
               children: [
                 TextSpan(text: '$greeting, '),
-                const TextSpan(
-                  text: 'Alex',
-                  style: TextStyle(color: AppTheme.primary),
+                TextSpan(
+                  text: user?.displayName ?? 'there',
+                  style: const TextStyle(color: AppTheme.primary),
                 ),
                 TextSpan(text: ' $emoji'),
               ],
@@ -137,7 +139,7 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
           ),
           const SizedBox(height: 4),
           const Text(
-            '3 activities this week • 2 friends active now',
+            'Find your next activity and meet your squad',
             style: TextStyle(
               fontSize: 13,
               color: Color(0xFF6B7280),

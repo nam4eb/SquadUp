@@ -125,13 +125,6 @@ class UpNextCardWidget extends ConsumerWidget {
                 value: '${activity.joinedCount}/${activity.maxParticipants}',
                 icon: 'group',
               ),
-              const SizedBox(width: 12),
-              _StatChip(
-                label: 'STREAK',
-                value: '5 days',
-                icon: 'local_fire_department',
-                isHighlighted: true,
-              ),
               const Spacer(),
               FilledButton(
                 onPressed: () =>

@@ -3,6 +3,8 @@
 namespace Tests\Feature\Api\V1;
 
 use App\Models\Block;
+use App\Models\Conversation;
+use App\Models\Message;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -129,6 +131,30 @@ class ChatTest extends TestCase
         ])->assertCreated()->assertJsonPath('data.type', 'location')
             ->assertJsonPath('data.payload.label', 'Meeting point')
             ->assertJsonPath('data.payload.latitude', 13.7563);
+    }
+
+    public function test_latest_message_handles_timestamp_ties_and_deleted_messages(): void
+    {
+        [$conversationId, $sender] = $this->direct();
+        $first = Message::create([
+            'conversation_id' => $conversationId, 'sender_id' => $sender->id,
+            'type' => 'text', 'body' => 'First',
+        ]);
+        $second = Message::create([
+            'conversation_id' => $conversationId, 'sender_id' => $sender->id,
+            'type' => 'text', 'body' => 'Second',
+        ]);
+        $first->forceFill(['created_at' => now()->startOfSecond()])->save();
+        $second->forceFill(['created_at' => $first->created_at])->save();
+        $winner = strcmp($first->id, $second->id) > 0 ? $first : $second;
+        $remaining = $winner->is($first) ? $second : $first;
+        $loaded = Conversation::with('latestMessage')->findOrFail($conversationId);
+        $this->assertSame($winner->id, $loaded->latestMessage->id);
+        $winner->delete();
+        $this->getJson('/api/v1/conversations')->assertOk()
+            ->assertJsonPath('data.0.latest_message.id', $remaining->id);
+        $remaining->delete();
+        $this->assertNull($loaded->fresh()->latestMessage);
     }
 
     private function direct(): array

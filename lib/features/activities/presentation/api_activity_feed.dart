@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
 import '../../../theme/app_theme.dart';
 import '../data/activities_repository.dart';
@@ -25,12 +26,23 @@ class ApiActivityFeed extends ConsumerWidget {
           child: Center(child: CircularProgressIndicator()),
         ),
       ),
-      error: (_, _) => SliverToBoxAdapter(
+      error: (error, _) => SliverToBoxAdapter(
         child: Center(
-          child: TextButton.icon(
-            onPressed: () => ref.invalidate(activityFeedProvider),
-            icon: const Icon(Icons.refresh),
-            label: const Text('Reload activities'),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  activityFeedErrorMessage(error),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () => ref.invalidate(activityFeedProvider),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reload activities'),
+              ),
+            ],
           ),
         ),
       ),
@@ -55,6 +67,23 @@ class ApiActivityFeed extends ConsumerWidget {
       ),
     );
   }
+}
+
+String activityFeedErrorMessage(Object error) {
+  if (error is DioException) {
+    if (error.response?.statusCode == 401) {
+      return 'Your session has expired. Please sign in again.';
+    }
+    if (error.type == DioExceptionType.connectionError) {
+      return 'Cannot connect. Check your connection and try again.';
+    }
+    if (error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.sendTimeout) {
+      return 'Activities took too long to load. Please try again.';
+    }
+  }
+  return 'Unable to load activities. Please try again.';
 }
 
 class _ActivityCard extends StatelessWidget {

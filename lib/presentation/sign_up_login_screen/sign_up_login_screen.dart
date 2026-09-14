@@ -211,9 +211,9 @@ class _SignUpLoginScreenState extends ConsumerState<SignUpLoginScreen>
             ],
           ),
           const SizedBox(height: 10),
-          _credentialRow('Email', 'alex.chen@squadup.app'),
+          _credentialRow('Email', 'demo@squadup.test'),
           const SizedBox(height: 4),
-          _credentialRow('Password', 'SquadUp2026!'),
+          _credentialRow('Password', 'DemoPass123!'),
         ],
       ),
     );

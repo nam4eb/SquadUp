@@ -110,20 +110,27 @@ class ActivityItem {
       commentsCount: json['comments_count'] as int? ?? 0,
       likedByMe: json['liked_by_me'] as bool? ?? false,
       hasChat: json['has_chat'] as bool? ?? false,
-      distanceKm: (json['distance_km'] as num?)?.toDouble(),
+      distanceKm: _decimal(json['distance_km']),
       sportId: sport['id'] as String?,
       sportName: sport['name'] as String?,
       sportSlug: sport['slug'] as String?,
-      latitude: (location['latitude'] as num?)?.toDouble(),
-      longitude: (location['longitude'] as num?)?.toDouble(),
+      latitude: _decimal(location['latitude']),
+      longitude: _decimal(location['longitude']),
       skillMin: skillRange['min'] as int?,
       skillMax: skillRange['max'] as int?,
       matchFormat: json['match_format'] as String?,
-      fee: (json['fee'] as num?)?.toDouble(),
+      fee: _decimal(json['fee']),
       currency: json['currency'] as String?,
     );
   }
 }
+
+double? _decimal(Object? value) => switch (value) {
+  null => null,
+  num number => number.toDouble(),
+  String text => double.parse(text),
+  _ => throw FormatException('Invalid activity decimal'),
+};
 
 class ActivityCommentItem {
   final String id;
