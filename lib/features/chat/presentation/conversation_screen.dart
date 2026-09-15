@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../../../core/realtime/realtime_service.dart';
 import '../../../core/network/api_client.dart';
@@ -30,6 +31,10 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
   final _markedRead = <String>{};
   ChatMessageItem? _replyingTo;
   Timer? _typingTimer;
+  Timer? _remoteTypingTimer;
+  bool _typingActive = false;
+  bool _retryingOutbox = false;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   String? _typingUser;
   Map<String, String> _mediaHeaders = const {};
   bool _mediaHeadersReady = false;
@@ -50,6 +55,17 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
           .subscribeConversation(widget.conversation.id, _onRealtimeEvent);
       _loadMediaHeaders();
       _recoverOutbox();
+      _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+        results,
+      ) {
+        if (!mounted) return;
+        if (!results.any((result) => result != ConnectivityResult.none)) {
+          return;
+        }
+        ref.read(realtimeServiceProvider).recover();
+        ref.invalidate(messagesProvider(widget.conversation.id));
+        _retryOutbox();
+      });
     });
   }
 
@@ -57,6 +73,8 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _typingTimer?.cancel();
+    _remoteTypingTimer?.cancel();
+    _connectivitySubscription?.cancel();
     ref
         .read(chatRepositoryProvider)
         .typing(widget.conversation.id, false)
@@ -531,21 +549,36 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
   void _onTyping(String value) {
     _typingTimer?.cancel();
     final repository = ref.read(chatRepositoryProvider);
-    repository.typing(widget.conversation.id, value.isNotEmpty).ignore();
-    if (value.isNotEmpty) {
-      _typingTimer = Timer(const Duration(seconds: 2), () {
+    if (value.trim().isEmpty) {
+      if (_typingActive) {
+        _typingActive = false;
         repository.typing(widget.conversation.id, false).ignore();
-      });
+      }
+      return;
     }
+    if (!_typingActive) {
+      _typingActive = true;
+      repository.typing(widget.conversation.id, true).ignore();
+    }
+    _typingTimer = Timer(const Duration(seconds: 2), () {
+      _typingActive = false;
+      repository.typing(widget.conversation.id, false).ignore();
+    });
   }
 
   void _onRealtimeEvent(String event, dynamic data) {
     if (!mounted) return;
     if (event == 'conversation.typing' && data is Map) {
       final typing = data['typing'] == true;
+      _remoteTypingTimer?.cancel();
       setState(() {
         _typingUser = typing ? data['display_name']?.toString() : null;
       });
+      if (typing) {
+        _remoteTypingTimer = Timer(const Duration(seconds: 5), () {
+          if (mounted) setState(() => _typingUser = null);
+        });
+      }
       return;
     }
     ref.invalidate(messagesProvider(widget.conversation.id));
@@ -658,15 +691,21 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen>
   }
 
   Future<void> _retryOutbox() async {
-    final pending = await ref
-        .read(chatOutboxProvider)
-        .forConversation(widget.conversation.id);
-    for (final item in pending) {
-      if (!mounted) return;
-      final local = _localMessages
-          .where((message) => message.clientMessageId == item.clientMessageId)
-          .firstOrNull;
-      if (local != null) await _retry(local);
+    if (_retryingOutbox) return;
+    _retryingOutbox = true;
+    try {
+      final pending = await ref
+          .read(chatOutboxProvider)
+          .forConversation(widget.conversation.id);
+      for (final item in pending) {
+        if (!mounted) return;
+        final local = _localMessages
+            .where((message) => message.clientMessageId == item.clientMessageId)
+            .firstOrNull;
+        if (local != null) await _retry(local);
+      }
+    } finally {
+      _retryingOutbox = false;
     }
   }
 

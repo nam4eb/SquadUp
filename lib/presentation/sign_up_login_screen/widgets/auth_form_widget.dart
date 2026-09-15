@@ -28,7 +28,6 @@ class _AuthFormWidgetState extends ConsumerState<AuthFormWidget> {
   final _displayNameController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
-  bool _rememberMe = false;
 
   @override
   void dispose() {
@@ -159,35 +158,10 @@ class _AuthFormWidgetState extends ConsumerState<AuthFormWidget> {
 
   Widget _buildLoginExtras() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      mainAxisAlignment: MainAxisAlignment.end,
       children: [
-        Row(
-          children: [
-            SizedBox(
-              width: 20,
-              height: 20,
-              child: Checkbox(
-                value: _rememberMe,
-                onChanged: (v) => setState(() => _rememberMe = v ?? false),
-                activeColor: AppTheme.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                side: const BorderSide(color: Color(0xFFD1D5DB), width: 1.5),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              'Remember me',
-              style: GoogleFonts.dmSans(
-                fontSize: 13,
-                color: const Color(0xFF6B7280),
-              ),
-            ),
-          ],
-        ),
-        GestureDetector(
-          onTap: () {},
+        TextButton(
+          onPressed: _showForgotPassword,
           child: Text(
             'Forgot password?',
             style: GoogleFonts.dmSans(
@@ -199,6 +173,57 @@ class _AuthFormWidgetState extends ConsumerState<AuthFormWidget> {
         ),
       ],
     );
+  }
+
+  Future<void> _showForgotPassword() async {
+    final controller = TextEditingController(text: _emailController.text.trim());
+    final email = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Reset password'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.email],
+          decoration: const InputDecoration(
+            labelText: 'Email address',
+            helperText: 'We will send reset instructions if the account exists.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = controller.text.trim();
+              if (value.contains('@')) Navigator.pop(dialogContext, value);
+            },
+            child: const Text('Send link'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (email == null || !mounted) return;
+    try {
+      await ref.read(authRepositoryProvider).forgotPassword(email);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('If the account exists, reset instructions were sent.'),
+          ),
+        );
+      }
+    } on AuthFailure catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    }
   }
 
   Widget _buildTermsRow() {

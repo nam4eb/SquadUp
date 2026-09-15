@@ -44,6 +44,14 @@ class AuthRepository {
     });
   }
 
+  Future<void> forgotPassword(String email) async {
+    try {
+      await _dio.post('/auth/forgot-password', data: {'email': email.trim()});
+    } on DioException catch (error) {
+      throw AuthFailure(_messageFrom(error));
+    }
+  }
+
   Future<AuthUser> me() async {
     final response = await _dio.get<Map<String, dynamic>>('/auth/me');
     return AuthUser.fromJson(response.data!['data'] as Map<String, dynamic>);

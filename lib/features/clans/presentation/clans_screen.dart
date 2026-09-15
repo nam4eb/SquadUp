@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../routes/app_routes.dart';
+import '../../../widgets/content_state_widgets.dart';
 import '../application/clans_controller.dart';
 import '../domain/clan_item.dart';
 
@@ -24,22 +25,33 @@ class ClansScreen extends ConsumerWidget {
         ],
       ),
       body: clans.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(
-          child: FilledButton(
-            onPressed: () =>
-                ref.read(clansControllerProvider.notifier).refresh(),
-            child: const Text('Retry'),
-          ),
+        loading: () => const ContentLoadingState(label: 'Loading clans'),
+        error: (_, _) => ContentErrorState(
+          title: 'Clans could not be loaded',
+          message: 'Check your connection and refresh this page.',
+          onRetry: () => ref.read(clansControllerProvider.notifier).refresh(),
         ),
-        data: (items) => RefreshIndicator(
-          onRefresh: () => ref.read(clansControllerProvider.notifier).refresh(),
-          child: ListView.builder(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
-            itemCount: items.length,
-            itemBuilder: (context, index) => _ClanCard(clan: items[index]),
-          ),
-        ),
+        data: (items) => items.isEmpty
+            ? RefreshableEmptyState(
+                icon: Icons.groups_2_outlined,
+                title: 'Find your squad',
+                message:
+                    'Create a clan and invite people you enjoy playing with.',
+                actionLabel: 'Create clan',
+                onAction: () => _create(context, ref),
+                onRefresh: () =>
+                    ref.read(clansControllerProvider.notifier).refresh(),
+              )
+            : RefreshIndicator(
+                onRefresh: () =>
+                    ref.read(clansControllerProvider.notifier).refresh(),
+                child: ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 120),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) =>
+                      _ClanCard(clan: items[index]),
+                ),
+              ),
       ),
     );
   }

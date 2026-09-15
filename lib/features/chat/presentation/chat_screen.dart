@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../routes/app_routes.dart';
 import '../../../core/realtime/realtime_service.dart';
+import '../../../widgets/content_state_widgets.dart';
 import '../../friends/data/friends_repository.dart';
 import '../data/chat_repository.dart';
 
@@ -67,38 +68,48 @@ class _ChatScreenState extends ConsumerState<ChatScreen>
         ],
       ),
       body: conversations.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, _) => Center(
-          child: FilledButton(
-            onPressed: () => ref.read(conversationsProvider.notifier).refresh(),
-            child: const Text('Retry'),
-          ),
+        loading: () => const ContentLoadingState(label: 'Loading chats'),
+        error: (_, _) => ContentErrorState(
+          title: 'Chats could not be loaded',
+          message: 'Check your connection and try again.',
+          onRetry: () => ref.read(conversationsProvider.notifier).refresh(),
         ),
-        data: (items) => RefreshIndicator(
-          onRefresh: () async {
-            await ref.read(conversationsProvider.notifier).refresh();
-          },
-          child: ListView.builder(
-            padding: const EdgeInsets.only(bottom: 110),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return ListTile(
-                leading: CircleAvatar(
-                  child: Icon(
-                    item.type == 'clan' ? Icons.groups : Icons.person,
-                  ),
+        data: (items) => items.isEmpty
+            ? RefreshableEmptyState(
+                icon: Icons.forum_outlined,
+                title: 'Start a conversation',
+                message: 'Message a friend or create a group for your squad.',
+                actionLabel: 'New message',
+                onAction: () => _startDirect(context, ref),
+                onRefresh: () =>
+                    ref.read(conversationsProvider.notifier).refresh(),
+              )
+            : RefreshIndicator(
+                onRefresh: () async {
+                  await ref.read(conversationsProvider.notifier).refresh();
+                },
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 110),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        child: Icon(
+                          item.type == 'clan' ? Icons.groups : Icons.person,
+                        ),
+                      ),
+                      title: Text(item.name),
+                      subtitle: Text(item.latestMessage ?? 'No messages yet'),
+                      trailing: item.unreadCount > 0
+                          ? Badge(label: Text('${item.unreadCount}'))
+                          : null,
+                      onTap: () =>
+                          context.push(AppRoutes.conversation, extra: item),
+                    );
+                  },
                 ),
-                title: Text(item.name),
-                subtitle: Text(item.latestMessage ?? 'No messages yet'),
-                trailing: item.unreadCount > 0
-                    ? Badge(label: Text('${item.unreadCount}'))
-                    : null,
-                onTap: () => context.push(AppRoutes.conversation, extra: item),
-              );
-            },
-          ),
-        ),
+              ),
       ),
     );
   }

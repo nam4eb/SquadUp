@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,7 +10,6 @@ import '../../theme/app_theme.dart';
 import '../../widgets/custom_icon_widget.dart';
 import './widgets/auth_form_widget.dart';
 import './widgets/auth_header_widget.dart';
-import './widgets/social_auth_widget.dart';
 import '../../features/authentication/application/auth_controller.dart';
 
 class SignUpLoginScreen extends ConsumerStatefulWidget {
@@ -58,11 +59,19 @@ class _SignUpLoginScreenState extends ConsumerState<SignUpLoginScreen>
 
   void _onAuthSuccess() {
     final user = ref.read(authControllerProvider).user;
+    final returnTo = GoRouterState.of(context).uri.queryParameters['returnTo'];
     context.go(
       user?.onboardingCompleted == true
-          ? AppRoutes.homeFeed
+          ? _safeReturnTo(returnTo)
           : AppRoutes.onboarding,
     );
+  }
+
+  String _safeReturnTo(String? value) {
+    if (value != null && value.startsWith('/') && !value.startsWith('//')) {
+      return value;
+    }
+    return AppRoutes.homeFeed;
   }
 
   @override
@@ -123,34 +132,12 @@ class _SignUpLoginScreenState extends ConsumerState<SignUpLoginScreen>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         AuthFormWidget(isLogin: _isLogin, onSuccess: _onAuthSuccess),
-        const SizedBox(height: 24),
-        _buildDivider(),
-        const SizedBox(height: 20),
-        const SocialAuthWidget(),
         const SizedBox(height: 28),
         _buildToggleRow(),
-        const SizedBox(height: 16),
-        _buildDemoCredentials(),
-      ],
-    );
-  }
-
-  Widget _buildDivider() {
-    return Row(
-      children: [
-        Expanded(child: Divider(color: AppTheme.primary.withAlpha(38))),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            'or continue with',
-            style: GoogleFonts.dmSans(
-              fontSize: 12,
-              color: const Color(0xFF9CA3AF),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ),
-        Expanded(child: Divider(color: AppTheme.primary.withAlpha(38))),
+        if (kDebugMode) ...[
+          const SizedBox(height: 16),
+          _buildDemoCredentials(),
+        ],
       ],
     );
   }
@@ -242,11 +229,20 @@ class _SignUpLoginScreenState extends ConsumerState<SignUpLoginScreen>
             ),
           ),
         ),
-        GestureDetector(
-          onTap: () {},
-          child: CustomIconWidget(
+        IconButton(
+          tooltip: 'Copy $label',
+          visualDensity: VisualDensity.compact,
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: value));
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('$label copied.')),
+              );
+            }
+          },
+          icon: CustomIconWidget(
             iconName: 'copy',
-            size: 14,
+            size: 16,
             color: AppTheme.primary,
           ),
         ),

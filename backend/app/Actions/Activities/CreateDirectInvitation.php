@@ -28,6 +28,14 @@ class CreateDirectInvitation
             throw new ActivityException('This user is already participating.', 'ALREADY_PARTICIPATING');
         }
 
+        $existing = ActivityInvitation::query()
+            ->where('activity_id', $activity->id)
+            ->where('invitee_id', $invitee->id)
+            ->first();
+        if ($existing?->status === ActivityInvitationStatus::Pending && ! $existing->expires_at?->isPast()) {
+            return $existing->load(['activity', 'inviter', 'invitee']);
+        }
+
         $invitation = ActivityInvitation::query()->updateOrCreate(
             ['activity_id' => $activity->id, 'invitee_id' => $invitee->id],
             [

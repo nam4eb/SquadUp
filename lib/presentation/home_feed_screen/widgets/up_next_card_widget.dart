@@ -160,13 +160,11 @@ class _StatChip extends StatelessWidget {
   final String label;
   final String value;
   final String icon;
-  final bool isHighlighted;
 
   const _StatChip({
     required this.label,
     required this.value,
     required this.icon,
-    this.isHighlighted = false,
   });
 
   @override
@@ -189,9 +187,7 @@ class _StatChip extends StatelessWidget {
             CustomIconWidget(
               iconName: icon,
               size: 14,
-              color: isHighlighted
-                  ? const Color(0xFFF4A261)
-                  : Colors.white.withAlpha(230),
+              color: Colors.white.withAlpha(230),
             ),
             const SizedBox(width: 4),
             Text(

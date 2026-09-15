@@ -74,13 +74,22 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isLogin =
           state.matchedLocation == AppRoutes.initial ||
           state.matchedLocation == AppRoutes.signUpLogin;
-      if (token == null) return isLogin ? null : AppRoutes.signUpLogin;
+      if (token == null) {
+        if (isLogin) return null;
+        final returnTo = Uri.encodeQueryComponent(state.uri.toString());
+        return '${AppRoutes.signUpLogin}?returnTo=$returnTo';
+      }
       if (isLogin) {
         try {
           final user = await ref.read(currentUserProvider.future);
-          return user.onboardingCompleted
-              ? AppRoutes.homeFeed
-              : AppRoutes.onboarding;
+          if (!user.onboardingCompleted) return AppRoutes.onboarding;
+          final returnTo = state.uri.queryParameters['returnTo'];
+          if (returnTo != null &&
+              returnTo.startsWith('/') &&
+              !returnTo.startsWith('//')) {
+            return returnTo;
+          }
+          return AppRoutes.homeFeed;
         } catch (_) {
           // Keep login available when a stored session cannot be restored.
           return null;

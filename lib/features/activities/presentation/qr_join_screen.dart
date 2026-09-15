@@ -14,7 +14,15 @@ class QrJoinScreen extends ConsumerStatefulWidget {
 }
 
 class _QrJoinScreenState extends ConsumerState<QrJoinScreen> {
+  final _scanner = MobileScannerController();
   bool _processing = false;
+  DateTime? _lastInvalidNotice;
+
+  @override
+  void dispose() {
+    _scanner.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -22,7 +30,7 @@ class _QrJoinScreenState extends ConsumerState<QrJoinScreen> {
     body: Stack(
       fit: StackFit.expand,
       children: [
-        MobileScanner(onDetect: _detected),
+        MobileScanner(controller: _scanner, onDetect: _detected),
         Center(
           child: Container(
             width: 250,
@@ -33,14 +41,38 @@ class _QrJoinScreenState extends ConsumerState<QrJoinScreen> {
             ),
           ),
         ),
-        const Align(
+        Align(
           alignment: Alignment.bottomCenter,
           child: SafeArea(
             child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'Place the SquadUP lobby QR inside the frame',
-                style: TextStyle(color: Colors.white, fontSize: 16),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'Place the SquadUP lobby QR inside the frame',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FilledButton.tonalIcon(
+                        onPressed: _processing ? null : _scanner.toggleTorch,
+                        icon: const Icon(Icons.flashlight_on_outlined),
+                        label: const Text('Torch'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.tonalIcon(
+                        onPressed: _processing
+                            ? null
+                            : () => context.push(AppRoutes.redeemInvitation),
+                        icon: const Icon(Icons.keyboard_outlined),
+                        label: const Text('Enter code'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
@@ -57,8 +89,19 @@ class _QrJoinScreenState extends ConsumerState<QrJoinScreen> {
     final uri = Uri.tryParse(raw);
     final secret = uri?.queryParameters['secret'];
     final type = uri?.queryParameters['type'] ?? 'link';
-    if (secret == null || !['link', 'code'].contains(type)) return;
+    if (secret == null || !['link', 'code'].contains(type)) {
+      final now = DateTime.now();
+      if (_lastInvalidNotice == null ||
+          now.difference(_lastInvalidNotice!) > const Duration(seconds: 3)) {
+        _lastInvalidNotice = now;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This is not a SquadUP lobby QR.')),
+        );
+      }
+      return;
+    }
     setState(() => _processing = true);
+    await _scanner.stop();
     try {
       final activityId = await ref
           .read(activitiesRepositoryProvider)
@@ -73,6 +116,7 @@ class _QrJoinScreenState extends ConsumerState<QrJoinScreen> {
           ),
         );
         setState(() => _processing = false);
+        await _scanner.start();
       }
     }
   }

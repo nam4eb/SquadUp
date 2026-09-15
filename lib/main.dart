@@ -91,7 +91,7 @@ class _SquadUpAppState extends ConsumerState<SquadUpApp> {
     return Sizer(
       builder: (context, orientation, screenType) {
         return MaterialApp.router(
-          title: 'squadup',
+          title: 'SquadUP',
           theme: AppTheme.lightTheme,
           darkTheme: AppTheme.darkTheme,
           themeMode: ThemeMode.light,

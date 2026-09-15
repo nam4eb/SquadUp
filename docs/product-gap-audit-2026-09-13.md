@@ -17,8 +17,8 @@
 | Moderation | Partial | Add media preview, bulk triage, complete IDOR matrix and admin health detail |
 | Offline behavior | Partial | Broaden persistent caches beyond home/chat and add user-facing cache controls |
 | Analytics | Partial | Add named product funnel events and an opt-in export/diagnostics UI |
-| Accessibility | Partial | Complete semantics/tap-target and screen-reader audit |
-| CI/release | Partial | CI workflow, Android release build, production migration and canary checklist |
+| Accessibility | Partial | Complete screen-reader audit on physical Android/iOS devices |
+| CI/release | Partial | CI gates added; configure app identity/signing and verify release builds |
 
 ## Performance findings and changes in this pass
 

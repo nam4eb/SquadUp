@@ -30,6 +30,11 @@ class ActivityInvitationAndLifecycleTest extends TestCase
             'notifiable_id' => $invitee->id,
             'type' => ActivityInvitationReceived::class,
         ]);
+        $this->postJson("/api/v1/activities/{$activity->id}/invitations", [
+            'user_id' => $invitee->id,
+        ])->assertOk()->assertJsonPath('data.id', $invitationId);
+        $this->assertDatabaseCount('activity_invitations', 1);
+        $this->assertDatabaseCount('notifications', 1);
 
         Sanctum::actingAs($invitee);
         $this->getJson("/api/v1/activities/{$activity->id}")->assertOk();

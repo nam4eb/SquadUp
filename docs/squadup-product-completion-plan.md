@@ -118,3 +118,9 @@
   app-support storage before upload, retried with the original idempotency key,
   restored across sessions, capped at 20 MB per file/50 MB total/50 items, and
   automatically deleted after success, eviction or seven-day expiry.
+- Notification-center rows now preserve backend activity/conversation/clan
+  payloads, render type-specific copy/icons, mark unread items and deep-link to
+  the associated feature instead of behaving as read-only acknowledgements.
+- Shared accessible loading/error/empty states now cover Chat, Clans and
+  Notifications, and CI quality gates run backend formatting/tests plus Flutter
+  formatting, analysis, tests and Android debug compilation.
