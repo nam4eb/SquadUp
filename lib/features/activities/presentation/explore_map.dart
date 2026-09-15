@@ -1,10 +1,10 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
-
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:go_router/go_router.dart';
+import '../../../core/maps/maps_loader.dart';
 import '../../../routes/app_routes.dart';
 import '../domain/activity_item.dart';
-import 'package:go_router/go_router.dart';
 
 class ExploreMap extends StatefulWidget {
   const ExploreMap({
@@ -12,157 +12,165 @@ class ExploreMap extends StatefulWidget {
     required this.activities,
     required this.initialCenter,
     required this.onSearchArea,
+    required this.radiusKm,
+    this.userLocation,
   });
-
   final List<ActivityItem> activities;
   final LatLng initialCenter;
   final ValueChanged<LatLng> onSearchArea;
-
+  final double radiusKm;
+  final LatLng? userLocation;
   @override
   State<ExploreMap> createState() => _ExploreMapState();
 }
 
 class _ExploreMapState extends State<ExploreMap> {
-  final _controller = MapController();
-  double _zoom = 13;
+  GoogleMapController? _controller;
+  late LatLng _center = widget.initialCenter;
+  late Future<void> _ready = loadGoogleMaps(googleMapsApiKey);
   bool _moved = false;
+  ActivityItem? _selected;
+
+  @override
+  void didUpdateWidget(covariant ExploreMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialCenter != widget.initialCenter) {
+      _center = widget.initialCenter;
+      _moved = false;
+      _controller?.animateCamera(CameraUpdate.newLatLng(_center));
+    }
+    if (_selected != null &&
+        !widget.activities.any((a) => a.id == _selected!.id)) {
+      _selected = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final groups = _clusters(widget.activities, _zoom);
-    return Stack(
-      children: [
-        FlutterMap(
-          mapController: _controller,
-          options: MapOptions(
-            initialCenter: widget.initialCenter,
-            initialZoom: _zoom,
-            minZoom: 3,
-            maxZoom: 19,
-            onPositionChanged: (camera, hasGesture) {
-              _zoom = camera.zoom;
-              if (hasGesture && !_moved) setState(() => _moved = true);
-              if (hasGesture) setState(() {});
-            },
-          ),
-          children: [
-            TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-              userAgentPackageName: 'com.squadup.app',
-            ),
-            MarkerLayer(
-              markers: groups.map((group) {
-                final multiple = group.items.length > 1;
-                return Marker(
-                  point: group.center,
-                  width: multiple ? 48 : 42,
-                  height: multiple ? 48 : 42,
-                  child: Semantics(
-                    button: true,
-                    label: multiple
-                        ? '${group.items.length} activities'
-                        : group.items.first.title,
-                    child: GestureDetector(
-                      onTap: () {
-                        if (multiple) {
-                          _controller.move(
-                            group.center,
-                            (_zoom + 2).clamp(3, 19),
-                          );
-                        } else {
-                          context.push(
-                            AppRoutes.activityDetail,
-                            extra: group.items.first.id,
-                          );
-                        }
-                      },
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: const [
-                            BoxShadow(blurRadius: 6, color: Colors.black26),
-                          ],
-                        ),
-                        child: Center(
-                          child: multiple
-                              ? Text(
-                                  '${group.items.length}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.sports,
-                                  color: Colors.white,
-                                  size: 21,
-                                ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            RichAttributionWidget(
-              attributions: const [
-                TextSourceAttribution('OpenStreetMap contributors'),
+    final supported =
+        kIsWeb ||
+        defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+    if (!supported || googleMapsApiKey.isEmpty) {
+      return const Center(
+        child: Text('Map is unavailable. Use List to find activities.'),
+      );
+    }
+    return FutureBuilder<void>(
+      future: _ready,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Unable to load the map. You can still use List.'),
+                TextButton(
+                  onPressed: () => setState(() {
+                    _ready = loadGoogleMaps(googleMapsApiKey);
+                  }),
+                  child: const Text('Retry'),
+                ),
               ],
             ),
-          ],
-        ),
-        if (_moved)
-          Positioned(
-            top: 12,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: FilledButton.icon(
-                onPressed: () {
-                  setState(() => _moved = false);
-                  widget.onSearchArea(_controller.camera.center);
+          );
+        }
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return Column(
+          children: [
+            Text(
+              '${widget.activities.where((a) => a.latitude != null && a.longitude != null).length} mapped activities'
+              '${widget.radiusKm > 0 ? ' · ${widget.radiusKm.round()} km radius' : ' · Choose an area to search nearby'}',
+            ),
+            Expanded(
+              child: GoogleMap(
+                initialCameraPosition: CameraPosition(
+                  target: widget.initialCenter,
+                  zoom: 12,
+                ),
+                onMapCreated: (controller) => _controller = controller,
+                onCameraMove: (camera) => _center = camera.target,
+                onCameraIdle: () {
+                  if (mounted) {
+                    setState(() => _moved = _center != widget.initialCenter);
+                  }
                 },
-                icon: const Icon(Icons.search, size: 18),
-                label: const Text('Search this area'),
+                myLocationButtonEnabled: false,
+                mapToolbarEnabled: false,
+                circles: {
+                  if (widget.radiusKm > 0)
+                    Circle(
+                      circleId: const CircleId('radius'),
+                      center: widget.initialCenter,
+                      radius: widget.radiusKm * 1000,
+                      fillColor: Colors.teal.withValues(alpha: .08),
+                      strokeColor: Colors.teal,
+                      strokeWidth: 1,
+                    ),
+                },
+                markers: {
+                  if (widget.userLocation != null)
+                    Marker(
+                      markerId: const MarkerId('user'),
+                      position: widget.userLocation!,
+                      icon: BitmapDescriptor.defaultMarkerWithHue(
+                        BitmapDescriptor.hueAzure,
+                      ),
+                      infoWindow: const InfoWindow(title: 'Your location'),
+                    ),
+                  for (final activity in widget.activities)
+                    if (activity.latitude != null && activity.longitude != null)
+                      Marker(
+                        markerId: MarkerId(activity.id),
+                        position: LatLng(
+                          activity.latitude!,
+                          activity.longitude!,
+                        ),
+                        infoWindow: InfoWindow(
+                          title: activity.title,
+                          snippet: activity.locationName,
+                        ),
+                        onTap: () => setState(() => _selected = activity),
+                      ),
+                },
               ),
             ),
-          ),
-      ],
+            TextButton.icon(
+              onPressed: _moved
+                  ? () {
+                      setState(() => _moved = false);
+                      widget.onSearchArea(_center);
+                    }
+                  : null,
+              icon: const Icon(Icons.search),
+              label: const Text('Search this area'),
+            ),
+            if (_selected case final activity?)
+              ListTile(
+                title: Text(
+                  activity.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  '${activity.locationName} · ${activity.joinedCount}/${activity.maxParticipants} joined',
+                  maxLines: 1,
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () =>
+                    context.push(AppRoutes.activityDetail, extra: activity.id),
+              ),
+          ],
+        );
+      },
     );
   }
-
-  List<_ActivityCluster> _clusters(List<ActivityItem> activities, double zoom) {
-    final precision = zoom >= 15
-        ? 1000.0
-        : zoom >= 12
-        ? 200.0
-        : zoom >= 9
-        ? 40.0
-        : 8.0;
-    final grouped = <String, List<ActivityItem>>{};
-    for (final activity in activities) {
-      final lat = activity.latitude;
-      final lng = activity.longitude;
-      if (lat == null || lng == null) continue;
-      final key = '${(lat * precision).round()}:${(lng * precision).round()}';
-      grouped.putIfAbsent(key, () => []).add(activity);
-    }
-    return grouped.values.map((items) {
-      final latitude =
-          items.map((item) => item.latitude!).reduce((a, b) => a + b) /
-          items.length;
-      final longitude =
-          items.map((item) => item.longitude!).reduce((a, b) => a + b) /
-          items.length;
-      return _ActivityCluster(LatLng(latitude, longitude), items);
-    }).toList();
-  }
-}
-
-class _ActivityCluster {
-  const _ActivityCluster(this.center, this.items);
-  final LatLng center;
-  final List<ActivityItem> items;
 }

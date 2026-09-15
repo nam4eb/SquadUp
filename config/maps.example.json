@@ -1,0 +1,6 @@
+{
+  "GOOGLE_MAPS_API_KEY": "",
+  "API_BASE_URL": "http://127.0.0.1:8001/api/v1",
+  "BROADCAST_AUTH_URL": "http://127.0.0.1:8001/api/broadcasting/auth",
+  "REVERB_PORT": "8081"
+}

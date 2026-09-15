@@ -5,6 +5,12 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val mapsDartDefines = (project.findProperty("dart-defines") as? String)
+    ?.split(",")?.associate {
+        val entry = String(java.util.Base64.getDecoder().decode(it)).split("=", limit = 2)
+        entry.first() to entry.getOrElse(1) { "" }
+    } ?: emptyMap()
+
 android {
     namespace = "com.example.squadup"
     compileSdk = flutter.compileSdkVersion
@@ -25,10 +31,11 @@ android {
         applicationId = "com.example.squadup"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = mapsDartDefines["GOOGLE_MAPS_API_KEY"] ?: ""
     }
 
     buildTypes {

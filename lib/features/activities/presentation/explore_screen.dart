@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../routes/app_routes.dart';
@@ -34,11 +34,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   bool _showMap = false;
   double _radius = 20;
   Position? _position;
+  LatLng? _areaCenter;
   String? _locationState;
   int _page = 1;
   bool _hasMore = false;
   List<ActivityItem> _results = const [];
   bool _loading = false;
+  bool _locating = false;
   int _loadGeneration = 0;
   String? _error;
 
@@ -85,8 +87,10 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       ),
                     ],
                     selected: {_showMap},
-                    onSelectionChanged: (value) =>
-                        setState(() => _showMap = value.first),
+                    onSelectionChanged: (value) {
+                      setState(() => _showMap = value.first);
+                      _saveFilters();
+                    },
                   ),
                 ),
               ],
@@ -215,7 +219,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               children: [
                 Wrap(
                   spacing: 8,
-                  children: [3, 5, 10, 25, 50]
+                  children: [3, 5, 10, 20, 25, 50]
                       .map(
                         (radius) => ChoiceChip(
                           label: Text('$radius km'),
@@ -229,9 +233,11 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                       .toList(),
                 ),
                 TextButton.icon(
-                  onPressed: _locateAndLoad,
+                  onPressed: _locating ? null : _locateAndLoad,
                   icon: const Icon(Icons.my_location),
-                  label: const Text('Use current location'),
+                  label: Text(
+                    _locating ? 'Finding location...' : 'Use current location',
+                  ),
                 ),
                 Row(
                   children: [
@@ -274,8 +280,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               Padding(
                 padding: const EdgeInsets.all(24),
                 child: Text(_error!, textAlign: TextAlign.center),
-              )
-            else if (!_loading && _results.isEmpty)
+              ),
+            if (!_showMap && !_loading && _results.isEmpty && _error == null)
               const Padding(
                 padding: EdgeInsets.all(32),
                 child: Center(child: Text('No matching activities.')),
@@ -285,16 +291,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                 height: MediaQuery.sizeOf(context).height * .55,
                 child: ExploreMap(
                   activities: _results,
-                  initialCenter: LatLng(
-                    _position?.latitude ??
-                        double.tryParse(_latitude.text) ??
-                        10.7769,
-                    _position?.longitude ??
-                        double.tryParse(_longitude.text) ??
-                        106.7009,
-                  ),
+                  radiusKm: _areaCenter == null ? 0 : _radius,
+                  userLocation: _position == null
+                      ? null
+                      : LatLng(_position!.latitude, _position!.longitude),
+                  initialCenter: _areaCenter ?? const LatLng(10.7769, 106.7009),
                   onSearchArea: (center) {
-                    _position = null;
+                    _locationState = 'Using selected map area';
                     _latitude.text = center.latitude.toStringAsFixed(6);
                     _longitude.text = center.longitude.toStringAsFixed(6);
                     _load();
@@ -351,17 +354,33 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     final generation = ++_loadGeneration;
     await _saveFilters();
     if (!mounted || generation != _loadGeneration) return;
-    final latitude =
-        _position?.latitude ?? double.tryParse(_latitude.text.trim());
-    final longitude =
-        _position?.longitude ?? double.tryParse(_longitude.text.trim());
-    if ((latitude == null) != (longitude == null)) {
-      setState(() => _error = 'Enter both latitude and longitude.');
+    final latitude = double.tryParse(_latitude.text.trim());
+    final longitude = double.tryParse(_longitude.text.trim());
+    if ((_latitude.text.trim().isNotEmpty ||
+            _longitude.text.trim().isNotEmpty) &&
+        (latitude == null ||
+            longitude == null ||
+            !latitude.isFinite ||
+            !longitude.isFinite ||
+            latitude.abs() > 90 ||
+            longitude.abs() > 180)) {
+      setState(() {
+        _loading = false;
+        _error =
+            'Enter valid latitude (-90 to 90) and longitude (-180 to 180).';
+      });
       return;
     }
     setState(() {
       _loading = true;
       _error = null;
+      _areaCenter = latitude == null || longitude == null
+          ? null
+          : LatLng(latitude, longitude);
+      if (!loadMore) {
+        _results = const [];
+        _hasMore = false;
+      }
     });
     try {
       if (latitude != null && longitude != null) {
@@ -455,47 +474,51 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   }
 
   Future<void> _locateAndLoad() async {
-    if (!await Geolocator.isLocationServiceEnabled()) {
-      setState(
-        () => _locationState = 'GPS is disabled. Enter a location below.',
-      );
-      await _load();
-      return;
-    }
-    var permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-    }
-    if (permission == LocationPermission.denied ||
-        permission == LocationPermission.deniedForever) {
-      setState(
-        () => _locationState = permission == LocationPermission.deniedForever
-            ? 'Location blocked in settings. Enter a location below.'
-            : 'Location denied. Enter a location below.',
-      );
-      await _load();
-      return;
-    }
+    if (_locating) return;
+    final generation = _loadGeneration;
+    setState(() => _locating = true);
     try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        throw StateError(
+          'Location services are disabled. Choose an area on the map.',
+        );
+      }
+      var permission = await Geolocator.checkPermission();
+      if (!mounted) return;
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        throw StateError(
+          'Location permission is blocked. Enable it in settings or choose a map area.',
+        );
+      }
       final position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.medium,
           timeLimit: Duration(seconds: 10),
         ),
       );
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _position = position;
+        _latitude.text = position.latitude.toString();
+        _longitude.text = position.longitude.toString();
         _locationState = 'Using current location';
       });
-    } catch (_) {
+      await _load();
+    } catch (error) {
       if (mounted) {
         setState(
-          () => _locationState = 'Unable to get GPS. Enter a location below.',
+          () => _locationState = error is StateError
+              ? error.message.toString()
+              : 'Unable to get location. Choose an area on the map.',
         );
       }
+    } finally {
+      if (mounted) setState(() => _locating = false);
     }
-    await _load();
   }
 
   List<ActivityItem> _dedupe(List<ActivityItem> items) {

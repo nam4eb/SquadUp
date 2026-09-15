@@ -89,6 +89,35 @@ class ExploreTest extends TestCase
             ->assertJsonPath('data.sport.slug', 'tennis');
     }
 
+    public function test_nearby_results_are_paginated_by_distance_and_respect_privacy(): void
+    {
+        $viewer = User::factory()->create();
+        $host = User::factory()->create();
+        [$category, $topic] = $this->taxonomy();
+        $sport = $this->sport('tennis');
+        $far = $this->activity($host, $category, $topic, $sport, 'Further', 10.02, 106);
+        $near = $this->activity($host, $category, $topic, $sport, 'Closer', 10.001, 106);
+        $this->activity($host, $category, $topic, $sport, 'Private', 10, 106, ['visibility' => 'private']);
+        $this->activity($host, $category, $topic, $sport, 'No coordinates', 10, 106,
+            ['latitude' => null, 'longitude' => null]);
+        Sanctum::actingAs($viewer);
+        $url = '/api/v1/explore?near_lat=10&near_lng=106&radius_km=5&per_page=1';
+        $this->getJson($url)->assertOk()->assertJsonPath('data.0.id', $near->id)
+            ->assertJsonPath('meta.total', 2)->assertJsonPath('meta.last_page', 2);
+        $this->getJson($url.'&page=2')->assertOk()->assertJsonPath('data.0.id', $far->id);
+        Block::create(['blocker_id' => $viewer->id, 'blocked_id' => $host->id]);
+        $this->getJson($url)->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_nearby_rejects_invalid_or_incomplete_coordinates(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+        $this->getJson('/api/v1/explore?near_lat=91&near_lng=106&radius_km=5')
+            ->assertUnprocessable()->assertJsonValidationErrors('near_lat');
+        $this->getJson('/api/v1/explore?near_lat=10&radius_km=5')
+            ->assertUnprocessable()->assertJsonValidationErrors('near_lng');
+    }
+
     private function taxonomy(): array
     {
         $category = ActivityCategory::create(['name' => 'Sports', 'slug' => 'sports']);
