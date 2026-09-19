@@ -1,13 +1,16 @@
+import java.util.Base64
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
-    id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+    id("kotlin-android")
 }
 
-val mapsDartDefines = (project.findProperty("dart-defines") as? String)
+val mapsDartDefines: Map<String, String> = (project.findProperty("dart-defines") as? String)
     ?.split(",")?.associate {
-        val entry = String(java.util.Base64.getDecoder().decode(it)).split("=", limit = 2)
+        val entry = String(Base64.getDecoder().decode(it)).split("=", limit = 2)
         entry.first() to entry.getOrElse(1) { "" }
     } ?: emptyMap()
 
@@ -22,8 +25,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
+    kotlin {
+        compilerOptions {
+            jvmTarget = JvmTarget.JVM_17
+        }
     }
 
     defaultConfig {
@@ -53,7 +58,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
-    implementation("androidx.multidex:multidex:2.0.1")
     implementation("com.google.android.material:material:1.13.0")
     implementation("androidx.concurrent:concurrent-futures:1.3.0")
 }

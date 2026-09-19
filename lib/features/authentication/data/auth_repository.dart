@@ -134,6 +134,9 @@ class AuthRepository {
         error.type == DioExceptionType.connectionTimeout) {
       return 'Cannot connect to SquadUP. Check that the API is running.';
     }
+    if (error.response != null) {
+      return 'Server responded with ${error.response!.statusCode}. Please try again.';
+    }
     return 'Authentication failed. Please try again.';
   }
 }

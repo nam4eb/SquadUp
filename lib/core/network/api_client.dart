@@ -3,11 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../config/app_config.dart';
 import '../performance/performance_telemetry.dart';
 
-const apiBaseUrl = String.fromEnvironment(
-  'API_BASE_URL',
-  defaultValue: 'http://127.0.0.1:8000/api/v1',
+final apiBaseUrl = buildApiBaseUrl(
+  String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://127.0.0.1:8000/api/v1',
+  ),
 );
 
 const authTokenKey = 'squadup_auth_token';
@@ -83,6 +86,7 @@ final dioProvider = Provider<Dio>((ref) {
         if (token != null && token.isNotEmpty) {
           options.headers['Authorization'] = 'Bearer $token';
         }
+        debugPrint('[API] ${options.method} ${options.uri}');
         handler.next(options);
       },
       onResponse: (response, handler) {
@@ -97,6 +101,9 @@ final dioProvider = Provider<Dio>((ref) {
             cacheHit: response.headers.value('X-Cache')?.toUpperCase() == 'HIT',
           );
         }
+        debugPrint(
+          '[API RESPONSE] ${response.requestOptions.method} ${response.requestOptions.uri} -> ${response.statusCode}',
+        );
         handler.next(response);
       },
       onError: (error, handler) async {
@@ -109,6 +116,14 @@ final dioProvider = Provider<Dio>((ref) {
             durationMs: DateTime.now().difference(started).inMilliseconds,
             statusCode: error.response?.statusCode,
             cacheHit: false,
+          );
+        }
+        debugPrint(
+          '[API ERROR] ${error.requestOptions.method} ${error.requestOptions.uri} -> ${error.type}: ${error.message}',
+        );
+        if (error.response != null) {
+          debugPrint(
+            '[API ERROR BODY] ${error.response?.statusCode} ${error.response?.data}',
           );
         }
         if (error.response?.statusCode == 401) {

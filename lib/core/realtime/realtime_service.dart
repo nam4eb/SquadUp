@@ -4,24 +4,26 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pusher_reverb_flutter/pusher_reverb_flutter.dart';
 
+import '../config/app_config.dart';
 import '../network/api_client.dart';
 
-const _reverbHost = String.fromEnvironment(
-  'REVERB_HOST',
-  defaultValue: '127.0.0.1',
+final _reverbHost = resolveHostForPlatform(
+  String.fromEnvironment('REVERB_HOST', defaultValue: '127.0.0.1'),
 );
-const _reverbPort = int.fromEnvironment('REVERB_PORT', defaultValue: 8080);
-const _reverbAppKey = String.fromEnvironment(
+final _reverbPort = int.fromEnvironment('REVERB_PORT', defaultValue: 8080);
+final _reverbAppKey = String.fromEnvironment(
   'REVERB_APP_KEY',
   defaultValue: 'squadup-local-key',
 );
-const _reverbUseTls = bool.fromEnvironment(
+final _reverbUseTls = bool.fromEnvironment(
   'REVERB_USE_TLS',
   defaultValue: false,
 );
-const _broadcastAuthUrl = String.fromEnvironment(
-  'BROADCAST_AUTH_URL',
-  defaultValue: 'http://127.0.0.1:8000/api/broadcasting/auth',
+final _broadcastAuthUrl = buildApiBaseUrl(
+  String.fromEnvironment(
+    'BROADCAST_AUTH_URL',
+    defaultValue: 'http://127.0.0.1:8000/api/broadcasting/auth',
+  ),
 );
 
 typedef RealtimeEventHandler = void Function(String event, dynamic data);
